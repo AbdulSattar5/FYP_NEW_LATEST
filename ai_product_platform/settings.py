@@ -10,23 +10,50 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
+import os
 from pathlib import Path
+
 from django.contrib.messages import constants as messages
+from django.core.exceptions import ImproperlyConfigured
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # optional during minimal tooling
+    def load_dotenv(*_args, **_kwargs):
+        return False
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+load_dotenv(BASE_DIR / ".env")
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-o0k9-x4p@g6^xs1t4+@vq^ftc#bf=ebzvendz^#%x1%nevb+3q"
+SECRET_KEY = os.environ.get("SECRET_KEY", "").strip()
+DEBUG = _env_bool("DEBUG", default=True)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "django-insecure-dev-only-set-secret-key-in-env-for-production"
+    else:
+        raise ImproperlyConfigured(
+            "SECRET_KEY must be set in the environment when DEBUG is False."
+        )
 
-ALLOWED_HOSTS = ['*']
+_allowed_raw = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").strip()
+ALLOWED_HOSTS: list[str] = [h.strip() for h in _allowed_raw.split(",") if h.strip()]
+if not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 
 # Application definition
@@ -47,13 +74,21 @@ INSTALLED_APPS = [
     'store',
 ]
 
-# Add Cloudinary if installed
-try:
-    import cloudinary
-    INSTALLED_APPS.insert(6, 'cloudinary_storage')
-    INSTALLED_APPS.insert(7, 'cloudinary')
-except ImportError:
-    pass
+# Cloudinary (optional): only register when configured and installed
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "").strip()
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "").strip()
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "").strip()
+CLOUDINARY_CONFIGURED = bool(
+    CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET
+)
+
+if CLOUDINARY_CONFIGURED:
+    try:
+        import cloudinary  # noqa: F401
+        INSTALLED_APPS.insert(6, 'cloudinary_storage')
+        INSTALLED_APPS.insert(7, 'cloudinary')
+    except ImportError:
+        pass
 
 # Crispy Forms Configuration
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
@@ -149,31 +184,30 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # ═══════════════════════════════════════════════════════════
 # CLOUDINARY CONFIGURATION (For Production Image Hosting)
 # ═══════════════════════════════════════════════════════════
-CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': 'duyvfn5fs',
-    'API_KEY': '753713783639351',
-    'API_SECRET': 'vMr7k7--HcJXRgcrsl89Ju_-GZ8',
-}
+if CLOUDINARY_CONFIGURED:
+    try:
+        import cloudinary
+        import cloudinary.uploader  # noqa: F401
+        import cloudinary.api  # noqa: F401
 
-# Configure Cloudinary (only if installed)
-try:
-    import cloudinary
-    import cloudinary.uploader
-    import cloudinary.api
-    
-    cloudinary.config(
-        cloud_name = CLOUDINARY_STORAGE['CLOUD_NAME'],
-        api_key = CLOUDINARY_STORAGE['API_KEY'],
-        api_secret = CLOUDINARY_STORAGE['API_SECRET'],
-        secure = True
-    )
-    
-    # Use Cloudinary for media storage (uncomment for production)
-    # DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-    
-except ImportError:
-    # Cloudinary not installed - using local storage
-    pass
+        CLOUDINARY_STORAGE = {
+            'CLOUD_NAME': CLOUDINARY_CLOUD_NAME,
+            'API_KEY': CLOUDINARY_API_KEY,
+            'API_SECRET': CLOUDINARY_API_SECRET,
+        }
+
+        cloudinary.config(
+            cloud_name=CLOUDINARY_CLOUD_NAME,
+            api_key=CLOUDINARY_API_KEY,
+            api_secret=CLOUDINARY_API_SECRET,
+            secure=True,
+        )
+
+        if _env_bool("USE_CLOUDINARY_STORAGE", default=False):
+            DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
+    except ImportError:
+        pass
 
 # Login/Logout URLs
 LOGIN_URL = '/login/'

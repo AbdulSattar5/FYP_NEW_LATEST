@@ -38,7 +38,7 @@
                     <div class="d-flex align-items-center">
                         <i class="fas fa-box-open fa-2x me-2" style="opacity: 0.8;"></i>
                         <div>
-                            <div class="fw-bold fs-5">1000+</div>
+                            <div class="fw-bold fs-5">{{ catalog_count }}</div>
                             <small style="opacity: 0.8;">Products</small>
                         </div>
                     </div>
@@ -52,8 +52,8 @@
                     <div class="d-flex align-items-center">
                         <i class="fas fa-users fa-2x me-2" style="opacity: 0.8;"></i>
                         <div>
-                            <div class="fw-bold fs-5">500+</div>
-                            <small style="opacity: 0.8;">Happy Customers</small>
+                            <div class="fw-bold fs-5">{{ category_count }}</div>
+                            <small style="opacity: 0.8;">Categories</small>
                         </div>
                     </div>
                 </div>
@@ -157,7 +157,7 @@
 <!-- ═══════════════════════════════════════════════════════════ -->
 <!-- SECTION 4: AI RECOMMENDATIONS -->
 <!-- ═══════════════════════════════════════════════════════════ -->
-{% if user.is_authenticated and recommended_products %}
+{% if recommended_products %}
 <section class="py-5" style="background: linear-gradient(135deg, #f8f7ff, #f0eeff);">
     <div class="container">
         <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
@@ -166,16 +166,24 @@
                     <i class="fas fa-robot me-2"></i>
                     <span class="text-gradient">Recommended For You</span>
                 </h2>
-                <p class="text-muted mb-0">Powered by AI — Based on your browsing & purchase history</p>
+                {% if has_personal_history %}
+                <p class="text-muted mb-0">Powered by AI — Based on your browsing and purchase history</p>
+                {% else %}
+                <p class="text-muted mb-0">Showing trending picks while your profile warms up</p>
+                {% endif %}
             </div>
+            {% if user.is_authenticated %}
             <a href="{% url 'store:recommendations' %}" class="btn btn-outline-primary btn-sm rounded-pill">
                 See All <i class="fas fa-arrow-right ms-1"></i>
             </a>
+            {% endif %}
         </div>
         
         <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
             {% for product in recommended_products %}
+            <div class="col">
                 {% include 'partials/product_card.html' with product=product recommended_ids=recommended_ids %}
+            </div>
             {% endfor %}
         </div>
     </div>
@@ -221,7 +229,39 @@
 </section>
 {% endif %}
 
+{% if recently_viewed_products %}
+<section class="py-5 bg-light">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="fw-bold">
+                <i class="fas fa-history me-2"></i>Recently Viewed
+            </h2>
+        </div>
+        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
+            {% for product in recently_viewed_products %}
+            <div class="col">
+                {% include 'partials/product_card.html' with product=product recommended_ids=recommended_ids %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+{% if not featured_products and not trending_products and not discounted_products and not recommended_products %}
+<section class="py-5">
+    <div class="container text-center">
+        <div style="font-size: 4rem; opacity: 0.3;">
+            <i class="fas fa-box-open"></i>
+        </div>
+        <h3 class="fw-bold mt-3">No Products Available Yet</h3>
+        <p class="text-muted mb-0">Please check back soon as inventory is being updated.</p>
+    </div>
+</section>
+{% endif %}
+
 <!-- ═══════════════════════════════════════════════════════════ -->
+{% if trending_products %}
 <!-- SECTION 5: TRENDING PRODUCTS -->
 <!-- ═══════════════════════════════════════════════════════════ -->
 <section class="py-5">
@@ -237,11 +277,14 @@
         
         <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
             {% for product in trending_products %}
+            <div class="col">
                 {% include 'partials/product_card.html' with product=product recommended_ids=recommended_ids %}
+            </div>
             {% endfor %}
         </div>
     </div>
 </section>
+{% endif %}
 
 <!-- ═══════════════════════════════════════════════════════════ -->
 <!-- SECTION 6: FEATURED PRODUCTS -->
@@ -260,7 +303,9 @@
         
         <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
             {% for product in featured_products %}
+            <div class="col">
                 {% include 'partials/product_card.html' with product=product recommended_ids=recommended_ids %}
+            </div>
             {% endfor %}
         </div>
     </div>
@@ -450,3 +495,7 @@ function startCountdown() {
 document.addEventListener('DOMContentLoaded', startCountdown);
 </script>
 {% endblock %}
+
+
+
+

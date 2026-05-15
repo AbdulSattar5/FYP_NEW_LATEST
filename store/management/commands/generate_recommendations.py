@@ -1,59 +1,81 @@
-from django.core.management.base import BaseCommand
-from django.contrib.auth.models import User
-from store.recommendation_engine import RecommendationEngine
 from datetime import datetime
+
+from django.contrib.auth.models import User
+from django.core.management.base import BaseCommand
+
+from store.recommendation_engine import RecommendationEngine
 
 
 class Command(BaseCommand):
-    help = 'Generate AI recommendations for users'
-    
+    help = "Generate recommendations from trained artifacts for active users/sessions."
+
     def add_arguments(self, parser):
         parser.add_argument(
-            '--user-id',
+            "--user-id",
             type=int,
-            help='Generate recommendations for specific user ID only',
+            help="Generate recommendations for specific user ID only.",
         )
-    
+        parser.add_argument(
+            "--session-key",
+            type=str,
+            help="Generate recommendations for specific anonymous session key only.",
+        )
+        parser.add_argument(
+            "--limit",
+            type=int,
+            default=12,
+            help="Maximum recommendations per actor (default: 12).",
+        )
+        parser.add_argument(
+            "--active-days",
+            type=int,
+            default=90,
+            help="Only actors active in the last N days are processed (default: 90).",
+        )
+
     def handle(self, *args, **options):
         start_time = datetime.now()
-        self.stdout.write(self.style.WARNING('🤖 Starting AI Recommendation Generation...'))
-        self.stdout.write('')
-        
+        user_id = options.get("user_id")
+        session_key = options.get("session_key")
+        limit = options.get("limit") or 12
+        active_days = options.get("active_days") or 90
+
+        if user_id and session_key:
+            self.stdout.write(self.style.ERROR("Use either --user-id or --session-key, not both."))
+            return
+
+        self.stdout.write(self.style.WARNING("Starting recommendation generation..."))
+        self.stdout.write("")
+
         engine = RecommendationEngine()
-        user_id = options.get('user_id')
-        
+
         if user_id:
-            # Generate for specific user
-            self.stdout.write(f'Generating recommendations for user ID: {user_id}')
-            try:
-                user = User.objects.get(id=user_id)
-                recs = engine.generate_recommendations_for_user(user_id)
-                
-                self.stdout.write(self.style.SUCCESS(
-                    f'✅ Generated {len(recs)} recommendations for {user.username}'
-                ))
-            except User.DoesNotExist:
-                self.stdout.write(self.style.ERROR(f'❌ User with ID {user_id} not found'))
+            user = User.objects.filter(id=user_id).first()
+            if user is None:
+                self.stdout.write(self.style.ERROR(f"User with ID {user_id} not found."))
                 return
-        else:
-            # Generate for all users
-            self.stdout.write('Generating recommendations for ALL users with interactions...')
-            self.stdout.write('')
-            
-            total_users = engine.generate_all_recommendations()
-            
-            self.stdout.write('')
+
+            recs = engine.generate_recommendations_for_user(user_id=user_id, n=limit)
             self.stdout.write(self.style.SUCCESS(
-                f'✅ Successfully processed {total_users} users'
+                f"Generated {len(recs)} recommendations for {user.username}."
             ))
-        
+        elif session_key:
+            recs = engine.generate_recommendations_for_session(session_key=session_key, n=limit)
+            self.stdout.write(self.style.SUCCESS(
+                f"Generated {len(recs)} recommendations for session {session_key}."
+            ))
+        else:
+            self.stdout.write(
+                f"Generating recommendations for active users/sessions in last {active_days} days..."
+            )
+            self.stdout.write("")
+            total_actors = engine.generate_all_recommendations(n=limit, active_days=active_days)
+            self.stdout.write(self.style.SUCCESS(
+                f"Successfully processed {total_actors} actors."
+            ))
+
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        
-        self.stdout.write('')
-        self.stdout.write(self.style.SUCCESS(f'⏱️  Completed in {duration:.2f} seconds'))
-        self.stdout.write('')
-        self.stdout.write('📊 Recommendations are now available in:')
-        self.stdout.write('   - Home page "Recommended For You" section')
-        self.stdout.write('   - Product detail pages')
-        self.stdout.write('   - /recommendations/ page')
+
+        self.stdout.write("")
+        self.stdout.write(self.style.SUCCESS(f"Completed in {duration:.2f} seconds"))

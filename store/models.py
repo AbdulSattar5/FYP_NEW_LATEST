@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.contrib.auth.models import User
 from django.utils.text import slugify
 import uuid
@@ -129,6 +130,7 @@ class Product(models.Model):
 
 INTERACTION_TYPES = [
     ('view', 'Viewed'),
+    ('click', 'Clicked'),
     ('cart', 'Added to Cart'),
     ('purchase', 'Purchased'),
     ('like', 'Liked/Feedback'),
@@ -137,25 +139,46 @@ INTERACTION_TYPES = [
 
 class UserInteraction(models.Model):
     user = models.ForeignKey(
-        User, 
-        on_delete=models.CASCADE, 
-        related_name='interactions'
+        User,
+        on_delete=models.CASCADE,
+        related_name='interactions',
+        null=True,
+        blank=True,
     )
+    session_key = models.CharField(max_length=64, blank=True, null=True, db_index=True)
     product = models.ForeignKey(
-        Product, 
-        on_delete=models.CASCADE, 
-        related_name='interactions'
+        Product,
+        on_delete=models.CASCADE,
+        related_name='interactions',
+        null=True,
+        blank=True,
     )
     interaction_type = models.CharField(max_length=20, choices=INTERACTION_TYPES)
     interaction_count = models.IntegerField(default=1)
-    timestamp = models.DateTimeField(auto_now=True)
-    
+    query = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+
     class Meta:
-        unique_together = ['user', 'product', 'interaction_type']
+        constraints = [
+            models.CheckConstraint(
+                check=Q(user__isnull=False) | Q(session_key__isnull=False),
+                name='interaction_user_or_session_present',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['timestamp']),
+            models.Index(fields=['interaction_type', 'timestamp']),
+            models.Index(fields=['user', 'timestamp']),
+            models.Index(fields=['session_key', 'timestamp']),
+            models.Index(fields=['product', 'timestamp']),
+        ]
         ordering = ['-timestamp']
-    
+
     def __str__(self):
-        return f"{self.user.username} → {self.product.name} ({self.interaction_type})"
+        actor = self.user.username if self.user_id else f"session:{self.session_key}"
+        product_name = self.product.name if self.product_id else 'n/a'
+        return f"{actor} -> {product_name} ({self.interaction_type})"
 
 
 # ═══════════════════════════════════════════════════════════
@@ -164,28 +187,47 @@ class UserInteraction(models.Model):
 
 class Recommendation(models.Model):
     user = models.ForeignKey(
-        User, 
-        on_delete=models.CASCADE, 
-        related_name='recommendations'
+        User,
+        on_delete=models.CASCADE,
+        related_name='recommendations',
+        null=True,
+        blank=True,
     )
+    session_key = models.CharField(max_length=64, blank=True, null=True, db_index=True)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     score = models.FloatField(
         default=0.0,
         help_text='Relevance score 0.0 to 1.0 from ML engine'
     )
     reason = models.CharField(
-        max_length=200, 
+        max_length=200,
         default='Based on your activity',
         help_text='Human-readable reason for recommendation'
     )
     timestamp = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         ordering = ['-score']
-        unique_together = ['user', 'product']
-    
+        constraints = [
+            models.CheckConstraint(
+                check=Q(user__isnull=False) | Q(session_key__isnull=False),
+                name='recommendation_user_or_session_present',
+            ),
+            models.UniqueConstraint(
+                fields=['user', 'product'],
+                condition=Q(user__isnull=False),
+                name='unique_recommendation_user_product',
+            ),
+            models.UniqueConstraint(
+                fields=['session_key', 'product'],
+                condition=Q(session_key__isnull=False),
+                name='unique_recommendation_session_product',
+            ),
+        ]
+
     def __str__(self):
-        return f"Rec for {self.user.username}: {self.product.name} ({self.score:.2f})"
+        actor = self.user.username if self.user_id else f"session:{self.session_key}"
+        return f"Rec for {actor}: {self.product.name} ({self.score:.2f})"
     
     @property
     def score_percentage(self):
@@ -309,3 +351,4 @@ class UserProfile(models.Model):
     
     def __str__(self):
         return f"Profile of {self.user.username}"
+

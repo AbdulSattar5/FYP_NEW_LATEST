@@ -35,13 +35,21 @@ function getCookieCsrf() {
  * Add product to cart via AJAX
  * @param {number} productId - Product ID to add
  */
-function addToCart(productId) {
+function addToCart(productId, quantity = 1, triggerButton = null) {
+    const parsedQuantity = Number.parseInt(quantity, 10);
+    const safeQuantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity : 1;
+    if (triggerButton) {
+        triggerButton.disabled = true;
+        triggerButton.classList.add('btn-loading');
+    }
+
     fetch(`/cart/add/${productId}/`, {
         method: 'POST',
         headers: {
             'X-CSRFToken': getCsrfToken() || getCookieCsrf(),
             'Content-Type': 'application/json',
-        }
+        },
+        body: JSON.stringify({ quantity: safeQuantity })
     })
         .then(response => response.json())
         .then(data => {
@@ -50,18 +58,26 @@ function addToCart(productId) {
                 updateCartBadge(data.cart_count);
 
                 // Animate cart icon
-                const cartIcon = document.getElementById('cart-badge');
+                const cartIcon = document.getElementById('cart-count-badge');
                 if (cartIcon) {
                     cartIcon.classList.add('bounce');
                     setTimeout(() => cartIcon.classList.remove('bounce'), 500);
                 }
             } else {
-                showToast(data.message || 'Error adding to cart', 'error');
+                const msg = data.message || 'Error adding to cart';
+                const type = msg.toLowerCase().includes('stock') ? 'warning' : 'error';
+                showToast(msg, type);
             }
         })
         .catch(error => {
             console.error('Cart error:', error);
             showToast('Network error. Please try again.', 'error');
+        })
+        .finally(() => {
+            if (triggerButton) {
+                triggerButton.disabled = false;
+                triggerButton.classList.remove('btn-loading');
+            }
         });
 }
 
@@ -134,10 +150,10 @@ function createToastContainer() {
  * @param {number} count - Number of items in cart
  */
 function updateCartBadge(count) {
-    const badges = document.querySelectorAll('.cart-badge');
+    const badges = document.querySelectorAll('.cart-badge, .cart-count-badge');
     badges.forEach(badge => {
         badge.textContent = count;
-        badge.style.display = count > 0 ? '' : 'none';
+        badge.style.display = count > 0 ? 'flex' : 'none';
     });
 }
 
@@ -472,6 +488,7 @@ const SearchAutocomplete = {
     },
 
     search(query) {
+        trackSearchQuery(query);
         // Simulated search - in production, fetch from API
         fetch(`/api/search-suggestions/?q=${encodeURIComponent(query)}`)
             .then(r => r.json())
@@ -531,6 +548,119 @@ const SearchAutocomplete = {
 
 // Initialize search autocomplete
 SearchAutocomplete.init();
+// Quick view modal
+function ensureQuickViewModal() {
+    let modalEl = document.getElementById('quickViewModal');
+    if (modalEl) return modalEl;
+
+    const shell = document.createElement('div');
+    shell.innerHTML = `
+        <div class="modal fade" id="quickViewModal" tabindex="-1" aria-labelledby="quickViewModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title fw-bold" id="quickViewModalLabel">Quick View</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="text-center py-4">
+                            <span class="spinner-border text-primary" aria-hidden="true"></span>
+                            <p class="text-muted mt-2 mb-0">Loading product...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    modalEl = shell.firstElementChild;
+    document.body.appendChild(modalEl);
+    return modalEl;
+}
+
+function renderQuickViewContent(product, detailUrl) {
+    const price = (typeof product.price === 'number' && product.price > 0) ? `Rs. ${product.price.toLocaleString()}` : 'Price unavailable';
+    const rating = (typeof product.rating === 'number') ? product.rating.toFixed(1) : '0.0';
+    const inStock = Number(product.stock || 0) > 0;
+
+    return `
+        <div class="row g-4 align-items-start">
+            <div class="col-md-5">
+                <img src="${product.image || ''}" alt="${product.title || 'Product image'}" class="img-fluid rounded border" style="width:100%;max-height:340px;object-fit:cover;">
+            </div>
+            <div class="col-md-7">
+                <p class="text-muted mb-1">${product.category || 'Uncategorized'}</p>
+                <h4 class="fw-bold mb-2">${product.title || 'Product'}</h4>
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <span class="badge ${inStock ? 'text-bg-success' : 'text-bg-danger'}">${inStock ? 'In stock' : 'Out of stock'}</span>
+                    <span class="text-muted"><i class="fas fa-star text-warning me-1"></i>${rating}/5</span>
+                </div>
+                <h4 class="text-primary fw-bold mb-3">${price}</h4>
+                <p class="text-muted">${product.description || 'No description available.'}</p>
+                <div class="d-flex gap-2 mt-3">
+                    ${inStock ? `<button type="button" class="btn btn-primary btn-add-cart" data-modal-add="${product.id}"><i class="fas fa-shopping-cart me-1"></i>Add to Cart</button>` : `<button type="button" class="btn btn-secondary" disabled><i class="fas fa-times-circle me-1"></i>Out of Stock</button>`}
+                    <a href="${detailUrl}" class="btn btn-outline-primary">
+                        <i class="fas fa-eye me-1"></i>View Details
+                    </a>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('.quick-view-trigger');
+    if (!trigger) return;
+
+    event.preventDefault();
+    const quickViewUrl = trigger.dataset.quickViewUrl;
+    const productUrl = trigger.dataset.productUrl;
+    const productId = trigger.dataset.productId;
+    if (!quickViewUrl) return;
+
+    const modalEl = ensureQuickViewModal();
+    const modalBody = modalEl.querySelector('.modal-body');
+    modalBody.innerHTML = `
+        <div class="text-center py-4">
+            <span class="spinner-border text-primary" aria-hidden="true"></span>
+            <p class="text-muted mt-2 mb-0">Loading product...</p>
+        </div>
+    `;
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+
+    fetch(quickViewUrl)
+        .then((response) => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
+        .then((data) => {
+            if (!data.success || !data.product) {
+                throw new Error('Invalid quick view response');
+            }
+            modalBody.innerHTML = renderQuickViewContent(data.product, productUrl || `/product/${encodeURIComponent(data.product.id)}/`);
+            if (productId) {
+                trackInteraction(productId, 'click', { metadata: { source: 'quick_view' } });
+            }
+        })
+        .catch((error) => {
+            console.error('Quick view error:', error);
+            modalBody.innerHTML = `
+                <div class="alert alert-danger mb-0">
+                    Could not load product preview. Please open the full product page.
+                </div>
+            `;
+        });
+});
+
+document.addEventListener('click', (event) => {
+    const addBtn = event.target.closest('[data-modal-add]');
+    if (!addBtn) return;
+    const productId = Number.parseInt(addBtn.dataset.modalAdd, 10);
+    if (!Number.isFinite(productId)) return;
+    addToCart(productId, 1, addBtn);
+});
 
 // ═══════════════════════════════════════════════════════════
 // 15. PRODUCT IMAGE ZOOM (Amazon-style)
@@ -568,20 +698,38 @@ initImageZoom();
 // 16. INTERACTION TRACKING (Background, Silent)
 // ═══════════════════════════════════════════════════════════
 
-function trackInteraction(productId, type) {
+function trackInteraction(productId, type, extra = {}) {
+    const payload = {
+        interaction_type: type
+    };
+    if (productId !== null && productId !== undefined) {
+        payload.product_id = productId;
+    }
+    if (extra.query) {
+        payload.query = extra.query;
+    }
+    if (extra.metadata) {
+        payload.metadata = extra.metadata;
+    }
+
     fetch('/track/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCsrfToken() || getCookieCsrf()
         },
-        body: JSON.stringify({
-            product_id: productId,
-            interaction_type: type
-        })
-    }).catch(() => { }); // Silent fail — tracking should never break UX
+        body: JSON.stringify(payload),
+        keepalive: type === 'click'
+    }).catch(() => { });
 }
 
+function trackSearchQuery(query) {
+    if (!query || query.length < 2) return;
+    trackInteraction(null, 'search', {
+        query: query,
+        metadata: { source: 'autocomplete' }
+    });
+}
 // Auto-track visible products using Intersection Observer
 const productObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
@@ -836,3 +984,5 @@ document.addEventListener('DOMContentLoaded', () => {
 console.log('🚀 AI Shop - Amazon-Style JavaScript Loaded Successfully!');
 console.log('📦 Features: Cart, Search, Recommendations, Tracking, Animations');
 console.log('🤖 ML-Powered Personalization Active');
+
+

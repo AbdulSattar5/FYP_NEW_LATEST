@@ -11,6 +11,7 @@ from django.views.decorators.http import require_GET, require_POST
 from django.utils import timezone
 from django.templatetags.static import static
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 from django.contrib.auth.models import User
 from store.models import (
     Category, Product, UserInteraction, Recommendation,
@@ -20,14 +21,17 @@ from store.forms import (
     UserSignupForm, UserLoginForm, UserProfileUpdateForm,
     ProductSearchForm, OrderForm, FeedbackForm, ProductForm
 )
-from store.recommendation_engine import RecommendationEngine, get_quick_recommendations
+from store.recommendation_engine import (
+    RecommendationEngine,
+    get_recommendations,
+    recommend_with_scores,
+)
 import logging
 import json
 import uuid
 
 logger = logging.getLogger(__name__)
 ALLOWED_TRACK_INTERACTIONS = {'view', 'click', 'cart', 'purchase', 'search'}
-TRACK_INTERACTION_MAP = {'click': 'view'}
 ORDER_SUBMISSION_TOKEN_PREFIX = 'order_submission_token'
 
 
@@ -58,6 +62,16 @@ def _product_image_url(product):
     return static('images/default-product.svg')
 
 
+def _parse_decimal_query_value(raw_value):
+    """Safely parse decimal query params used in filters."""
+    if raw_value in (None, ''):
+        return None
+    try:
+        return Decimal(str(raw_value).strip())
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+
 def _serialize_product_for_api(product):
     """Common product serializer for JSON APIs."""
     return {
@@ -86,31 +100,98 @@ def _issue_order_submission_token(request, product_id):
     return token
 
 
+def _dedupe_products(products, limit=None, exclude_ids=None):
+    """Return unique in-stock active products while preserving order."""
+    seen = set(exclude_ids or set())
+    unique_products = []
+    for product in products or []:
+        if not product:
+            continue
+        if not product.is_available or product.stock_level <= 0:
+            continue
+        if product.product_id in seen:
+            continue
+        seen.add(product.product_id)
+        unique_products.append(product)
+        if limit and len(unique_products) >= limit:
+            break
+    return unique_products
+
+
+def _get_actor_recommendation_kwargs(request):
+    """Return kwargs for recommendation calls based on user/session identity."""
+    if request.user.is_authenticated:
+        return {'user': request.user}
+    return {'session_key': _ensure_session_key(request)}
+
+
+def _get_trending_products(limit=8, exclude_ids=None):
+    """Simple trending fallback from active in-stock catalog."""
+    products = Product.objects.filter(
+        is_available=True,
+        stock_level__gt=0,
+    ).select_related('category').order_by('-rating', '-stock_level', '-created_at')
+    return _dedupe_products(products, limit=limit, exclude_ids=exclude_ids)
+
+
+def _get_recently_viewed_products(request, limit=8, exclude_ids=None):
+    """Return recently viewed products for logged-in users or anonymous sessions."""
+    filters = {
+        'interaction_type': 'view',
+        'product__isnull': False,
+    }
+    if request.user.is_authenticated:
+        filters['user'] = request.user
+    else:
+        filters['session_key'] = _ensure_session_key(request)
+
+    viewed_ids = list(
+        UserInteraction.objects.filter(**filters)
+        .order_by('-timestamp')
+        .values_list('product_id', flat=True)
+    )
+    if not viewed_ids:
+        return []
+
+    products = Product.objects.filter(
+        product_id__in=viewed_ids,
+        is_available=True,
+        stock_level__gt=0,
+    ).select_related('category')
+    product_map = {product.product_id: product for product in products}
+    ordered = [product_map[pid] for pid in viewed_ids if pid in product_map]
+    return _dedupe_products(ordered, limit=limit, exclude_ids=exclude_ids)
+
+
 # ═══════════════════════════════════════════════════════════
 # HELPER FUNCTION - INTERACTION TRACKING
 # ═══════════════════════════════════════════════════════════
 
-def log_interaction(user, product_id, interaction_type, count_increment=1):
+def log_interaction(user, product_id, interaction_type, count_increment=1, session_key=None, query='', metadata=None):
     """
     Automatically track user behavior for ML engine
     Called from views to log: 'view', 'cart', 'purchase', 'like', 'search'
     """
-    if not user.is_authenticated:
+    actor_user = user if user and user.is_authenticated else None
+    actor_session = session_key.strip() if isinstance(session_key, str) and session_key.strip() else None
+
+    if actor_user is None and actor_session is None:
         return
-    
+
     try:
-        product = Product.objects.get(product_id=product_id, is_available=True)
-        interaction, created = UserInteraction.objects.get_or_create(
-            user=user,
+        product = Product.objects.get(product_id=product_id, is_available=True) if product_id else None
+        UserInteraction.objects.create(
+            user=actor_user,
+            session_key=actor_session,
             product=product,
             interaction_type=interaction_type,
-            defaults={'interaction_count': count_increment}
+            interaction_count=max(1, int(count_increment or 1)),
+            query=(query or '').strip(),
+            metadata=metadata or {},
         )
-        if not created:
-            interaction.interaction_count += count_increment
-            interaction.save(update_fields=['interaction_count', 'timestamp'])
-        
-        logger.info(f"Logged {interaction_type} for user {user.username} on product {product.name}")
+        actor_label = actor_user.username if actor_user else f'session:{actor_session}'
+        product_label = product.name if product else 'n/a'
+        logger.info(f"Logged {interaction_type} for {actor_label} on product {product_label}")
     except Product.DoesNotExist:
         logger.warning(f"Product {product_id} not found for interaction logging")
     except Exception as e:
@@ -148,21 +229,31 @@ def home_view(request):
     categories = Category.objects.annotate(
         product_count=Count('products', filter=Q(products__is_available=True))
     )[:8]
+    catalog_count = Product.objects.filter(is_available=True).count()
+    category_count = Category.objects.count()
     
-    # AI Recommendations
-    recommended_products = []
-    recommended_ids = []
-    
+    actor_kwargs = _get_actor_recommendation_kwargs(request)
+    has_personal_history = False
     if request.user.is_authenticated:
-        # Get personalized recommendations
-        recommended_products = get_quick_recommendations(request.user.id, n=6)
-        recommended_ids = [p.product_id for p in recommended_products]
+        has_personal_history = UserInteraction.objects.filter(user=request.user).exists()
     else:
-        # For guests, show popular products
-        recommended_products = Product.objects.filter(
-            is_available=True,
-            stock_level__gt=0
-        ).order_by('-rating')[:6].select_related('category')
+        has_personal_history = UserInteraction.objects.filter(
+            session_key=actor_kwargs.get('session_key')
+        ).exists()
+
+    recommended_products = _dedupe_products(
+        get_recommendations(limit=6, **actor_kwargs),
+        limit=6,
+    )
+    if not recommended_products:
+        recommended_products = _get_trending_products(limit=6)
+
+    recommended_ids = [product.product_id for product in recommended_products]
+    recently_viewed_products = _get_recently_viewed_products(
+        request,
+        limit=6,
+        exclude_ids=set(recommended_ids),
+    )
     
     context = {
         'featured_products': featured_products,
@@ -171,6 +262,10 @@ def home_view(request):
         'categories': categories,
         'recommended_products': recommended_products,
         'recommended_ids': recommended_ids,
+        'recently_viewed_products': recently_viewed_products,
+        'has_personal_history': has_personal_history,
+        'catalog_count': catalog_count,
+        'category_count': category_count,
     }
     
     return render(request, 'home.html', context)
@@ -334,10 +429,19 @@ def product_list_view(request):
     
     # Search
     search_query = request.GET.get('q', '')
+    actor_kwargs = _get_actor_recommendation_kwargs(request)
     if search_query:
         products = products.filter(
             Q(name__icontains=search_query) |
             Q(description__icontains=search_query)
+        )
+        log_interaction(
+            request.user,
+            None,
+            'search',
+            session_key=None if request.user.is_authenticated else actor_kwargs.get('session_key'),
+            query=search_query,
+            metadata={'source': 'product_list'},
         )
     
     # Category filter
@@ -350,11 +454,19 @@ def product_list_view(request):
     # Price filter
     min_price = request.GET.get('min_price', '')
     max_price = request.GET.get('max_price', '')
-    
-    if min_price:
-        products = products.filter(price__gte=min_price)
-    if max_price:
-        products = products.filter(price__lte=max_price)
+    min_price_value = _parse_decimal_query_value(min_price)
+    max_price_value = _parse_decimal_query_value(max_price)
+    price_filter_error = False
+
+    if min_price and min_price_value is None:
+        price_filter_error = True
+    if max_price and max_price_value is None:
+        price_filter_error = True
+
+    if min_price_value is not None:
+        products = products.filter(price__gte=min_price_value)
+    if max_price_value is not None:
+        products = products.filter(price__lte=max_price_value)
     
     # Sort
     sort_by = request.GET.get('sort_by', 'newest')
@@ -384,10 +496,11 @@ def product_list_view(request):
     )
     
     # Get recommended product IDs for badge display
-    recommended_ids = []
-    if request.user.is_authenticated:
-        recommended_products = get_quick_recommendations(request.user.id, n=12)
-        recommended_ids = [p.product_id for p in recommended_products]
+    recommended_products = _dedupe_products(
+        get_recommendations(limit=12, **actor_kwargs),
+        limit=12,
+    )
+    recommended_ids = [p.product_id for p in recommended_products]
     
     context = {
         'products': page_obj.object_list,
@@ -401,6 +514,7 @@ def product_list_view(request):
         'recommended_ids': recommended_ids,
         'min_price': min_price,
         'max_price': max_price,
+        'price_filter_error': price_filter_error,
     }
     
     return render(request, 'products/product_list.html', context)
@@ -419,23 +533,13 @@ def product_detail_view(request, pk):
         is_available=True
     )
     
-    # Log view interaction
-    log_interaction(request.user, pk, 'view')
-    
-    # Check if recommendations are fresh (less than 1 hour old)
-    if request.user.is_authenticated:
-        recent_rec_exists = Recommendation.objects.filter(
-            user=request.user,
-            timestamp__gte=timezone.now() - timedelta(hours=1)
-        ).exists()
-        
-        if not recent_rec_exists:
-            # Trigger recommendation refresh in background
-            try:
-                engine = RecommendationEngine()
-                engine.generate_recommendations_for_user(request.user.id)
-            except Exception as e:
-                logger.error(f"Error generating recommendations: {e}")
+    actor_kwargs = _get_actor_recommendation_kwargs(request)
+    log_interaction(
+        request.user,
+        pk,
+        'view',
+        session_key=None if request.user.is_authenticated else actor_kwargs.get('session_key'),
+    )
     
     # Similar products from same category
     similar_base_qs = Product.objects.filter(
@@ -443,26 +547,33 @@ def product_detail_view(request, pk):
         stock_level__gt=0
     ).exclude(product_id=pk).select_related('category')
     if product.category_id:
-        similar_products = similar_base_qs.filter(category=product.category).order_by('-rating')[:6]
+        similar_products = _dedupe_products(
+            similar_base_qs.filter(category=product.category).order_by('-rating'),
+            limit=6,
+            exclude_ids={product.product_id},
+        )
     else:
-        similar_products = similar_base_qs.order_by('-rating')[:6]
-    
-    # Personalized recommendations for sidebar
-    recommended_products = []
-    recommended_ids = []
-    if request.user.is_authenticated:
-        recommended_products = [
-            rec_product for rec_product in get_quick_recommendations(request.user.id, n=4)
-            if rec_product.is_available and rec_product.stock_level > 0 and rec_product.product_id != product.product_id
-        ]
-        if not recommended_products:
-            recommended_products = list(
-                Product.objects.filter(
-                    is_available=True,
-                    stock_level__gt=0
-                ).exclude(product_id=product.product_id).order_by('-rating')[:4].select_related('category')
-            )
-        recommended_ids = [p.product_id for p in recommended_products]
+        similar_products = _dedupe_products(
+            similar_base_qs.order_by('-rating'),
+            limit=6,
+            exclude_ids={product.product_id},
+        )
+
+    recommended_products = _dedupe_products(
+        get_recommendations(limit=4, **actor_kwargs),
+        limit=4,
+        exclude_ids={product.product_id},
+    )
+    if not recommended_products:
+        recommended_products = _get_trending_products(limit=4, exclude_ids={product.product_id})
+    recommended_ids = [p.product_id for p in recommended_products]
+
+    trending_products = _get_trending_products(limit=6, exclude_ids={product.product_id})
+    recently_viewed_products = _get_recently_viewed_products(
+        request,
+        limit=6,
+        exclude_ids={product.product_id},
+    )
     
     # Get product feedbacks
     feedbacks = Feedback.objects.filter(
@@ -495,6 +606,8 @@ def product_detail_view(request, pk):
         'similar_products': similar_products,
         'recommended_products': recommended_products,
         'recommended_ids': recommended_ids,
+        'trending_products': trending_products,
+        'recently_viewed_products': recently_viewed_products,
         'feedbacks': feedbacks,
         'has_feedback': has_feedback,
         'has_purchased': has_purchased,
@@ -523,11 +636,19 @@ def category_products_view(request, slug):
     # Apply price filter
     min_price = request.GET.get('min_price', '')
     max_price = request.GET.get('max_price', '')
-    
-    if min_price:
-        products = products.filter(price__gte=min_price)
-    if max_price:
-        products = products.filter(price__lte=max_price)
+    min_price_value = _parse_decimal_query_value(min_price)
+    max_price_value = _parse_decimal_query_value(max_price)
+    price_filter_error = False
+
+    if min_price and min_price_value is None:
+        price_filter_error = True
+    if max_price and max_price_value is None:
+        price_filter_error = True
+
+    if min_price_value is not None:
+        products = products.filter(price__gte=min_price_value)
+    if max_price_value is not None:
+        products = products.filter(price__lte=max_price_value)
     
     # Sort
     sort_by = request.GET.get('sort_by', 'newest')
@@ -557,14 +678,12 @@ def category_products_view(request, slug):
     )
     
     # Get user recommendations for badge
-    user_recommendations = []
-    recommended_ids = []
-    if request.user.is_authenticated:
-        user_recommendations = [
-            rec_product for rec_product in get_quick_recommendations(request.user.id, n=12)
-            if rec_product.is_available and rec_product.stock_level > 0
-        ]
-        recommended_ids = [p.product_id for p in user_recommendations]
+    actor_kwargs = _get_actor_recommendation_kwargs(request)
+    user_recommendations = _dedupe_products(
+        get_recommendations(limit=12, **actor_kwargs),
+        limit=12,
+    )
+    recommended_ids = [p.product_id for p in user_recommendations]
     
     context = {
         'category': category,
@@ -578,6 +697,7 @@ def category_products_view(request, slug):
         'sort_by': sort_by,
         'min_price': min_price,
         'max_price': max_price,
+        'price_filter_error': price_filter_error,
     }
     
     return render(request, 'products/category_products.html', context)
@@ -633,12 +753,9 @@ def track_interaction_api_view(request):
 
     product_id = payload.get('product_id')
     interaction_type = str(payload.get('interaction_type', '')).strip().lower()
-
-    if not product_id:
-        return JsonResponse({
-            'success': False,
-            'error': 'product_id is required',
-        }, status=400)
+    query = str(payload.get('query', '')).strip()
+    raw_metadata = payload.get('metadata', {})
+    metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
 
     if interaction_type not in ALLOWED_TRACK_INTERACTIONS:
         return JsonResponse({
@@ -646,15 +763,28 @@ def track_interaction_api_view(request):
             'error': f'Invalid interaction_type. Allowed: {sorted(ALLOWED_TRACK_INTERACTIONS)}',
         }, status=400)
 
-    product = Product.objects.filter(
-        product_id=product_id,
-        is_available=True,
-    ).first()
-    if not product:
+    product = None
+    if product_id:
+        product = Product.objects.filter(
+            product_id=product_id,
+            is_available=True,
+        ).first()
+        if not product:
+            return JsonResponse({
+                'success': False,
+                'error': 'Product not found',
+            }, status=404)
+    elif interaction_type != 'search':
         return JsonResponse({
             'success': False,
-            'error': 'Product not found',
-        }, status=404)
+            'error': 'product_id is required',
+        }, status=400)
+
+    if interaction_type == 'search' and not query and not product:
+        return JsonResponse({
+            'success': False,
+            'error': 'query is required for search events without product_id',
+        }, status=400)
 
     # Purchase interactions are logged in order flow; avoid duplicate records.
     if interaction_type == 'purchase':
@@ -663,25 +793,28 @@ def track_interaction_api_view(request):
             'message': 'Purchase logging is handled by order placement',
         })
 
-    if request.user.is_authenticated:
-        normalized_type = TRACK_INTERACTION_MAP.get(interaction_type, interaction_type)
-        interaction, created = UserInteraction.objects.get_or_create(
-            user=request.user,
-            product=product,
-            interaction_type=normalized_type,
-            defaults={'interaction_count': 1},
-        )
-        if not created:
-            interaction.interaction_count += 1
-            interaction.save(update_fields=['interaction_count', 'timestamp'])
-    else:
-        session_key = _ensure_session_key(request)
+    session_key = _ensure_session_key(request)
+    actor_user = request.user if request.user.is_authenticated else None
+
+    log_interaction(
+        user=actor_user,
+        product_id=product.product_id if product else None,
+        interaction_type=interaction_type,
+        count_increment=1,
+        session_key=None if actor_user else session_key,
+        query=query,
+        metadata=metadata,
+    )
+
+    if not actor_user:
         anonymous_log = request.session.get('anonymous_interactions', {})
-        event_key = f'{product.product_id}:{interaction_type}'
+        product_key = product.product_id if product else 'search'
+        event_key = f'{product_key}:{interaction_type}:{query}'
         event = anonymous_log.get(event_key, {
             'session_key': session_key,
-            'product_id': product.product_id,
+            'product_id': product.product_id if product else None,
             'interaction_type': interaction_type,
+            'query': query,
             'count': 0,
         })
         event['count'] += 1
@@ -801,25 +934,21 @@ def update_cart_api_view(request, product_id):
 @require_GET
 def recommendations_api_view(request):
     """Get personalized recommendations with fallback to popular products."""
-    recommended_products = []
-
-    if request.user.is_authenticated:
-        recommended_products = [
-            product for product in get_quick_recommendations(request.user.id, n=12)
-            if product.is_available and product.stock_level > 0
-        ]
+    actor_kwargs = _get_actor_recommendation_kwargs(request)
+    recommended_products = _dedupe_products(
+        get_recommendations(limit=12, **actor_kwargs),
+        limit=12,
+    )
+    response_source = 'personalized'
 
     if not recommended_products:
-        recommended_products = list(
-            Product.objects.filter(
-                is_available=True,
-                stock_level__gt=0,
-            ).select_related('category').order_by('-rating', '-stock_level')[:12]
-        )
+        recommended_products = _get_trending_products(limit=12)
+        response_source = 'fallback'
 
     recommendations = [_serialize_product_for_api(product) for product in recommended_products]
     return JsonResponse({
         'success': True,
+        'source': response_source,
         'recommendations': recommendations,
     })
 
@@ -855,15 +984,26 @@ def product_quick_view_api_view(request, product_id):
 @login_required
 def recommendations_view(request):
     """Full page showing all AI recommendations for the user"""
-    
-    # Always regenerate fresh recommendations
-    engine = RecommendationEngine()
-    engine.generate_recommendations_for_user(request.user.id)
-    
-    # Get all recommendations with product details
-    recommendations = Recommendation.objects.filter(
-        user=request.user
-    ).select_related('product', 'product__category').order_by('-score')
+
+    recommended_products = _dedupe_products(
+        get_recommendations(user=request.user, limit=96),
+        limit=96,
+    )
+
+    # Score metadata for UI badges/reasons.
+    scored = recommend_with_scores(user=request.user, limit=96)
+    score_map = {item['product_id']: item for item in scored}
+
+    recommendation_rows = []
+    for product in recommended_products:
+        score_item = score_map.get(product.product_id, {})
+        score_value = float(score_item.get('score', 0.0))
+        recommendation_rows.append({
+            'product': product,
+            'score': score_value,
+            'score_percentage': int(round(score_value * 100)),
+            'reason': score_item.get('reason', 'Popular with shoppers'),
+        })
     
     # User stats for display
     interaction_count = UserInteraction.objects.filter(user=request.user).count()
@@ -881,17 +1021,24 @@ def recommendations_view(request):
     ).count()
     
     # Pagination
-    paginator = Paginator(recommendations, 12)
+    paginator = Paginator(recommendation_rows, 12)
     page_obj = paginator.get_page(request.GET.get('page'))
+
+    trending_products = _get_trending_products(limit=6)
+    recently_viewed_products = _get_recently_viewed_products(request, limit=6)
     
     context = {
         'recommendations': page_obj.object_list,
+        'recommended_products': page_obj.object_list,
+        'recommended_ids': [row['product'].product_id for row in recommendation_rows],
         'page_obj': page_obj,
         'interaction_count': interaction_count,
         'products_viewed': products_viewed,
         'products_purchased': products_purchased,
         'items_carted': items_carted,
-        'total_recs': recommendations.count(),
+        'trending_products': trending_products,
+        'recently_viewed_products': recently_viewed_products,
+        'total_recs': len(recommendation_rows),
     }
     
     return render(request, 'products/recommendations.html', context)
@@ -933,8 +1080,26 @@ def refresh_recommendations_view(request):
 def add_to_cart_view(request, product_id):
     """Add product to cart (AJAX) and log interaction"""
     try:
-        product = get_object_or_404(Product, product_id=product_id)
-        
+        product = get_object_or_404(Product, product_id=product_id, is_available=True)
+
+        payload = _parse_json_body(request)
+        if payload is None:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid request payload',
+            }, status=400)
+
+        requested_quantity = payload.get('quantity', 1)
+        try:
+            requested_quantity = int(requested_quantity)
+        except (TypeError, ValueError):
+            requested_quantity = 1
+        if requested_quantity < 1:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Quantity must be at least 1',
+            }, status=400)
+
         # Check stock
         if product.stock_level <= 0:
             return JsonResponse({
@@ -948,13 +1113,24 @@ def add_to_cart_view(request, product_id):
         # Add to cart
         product_key = str(product_id)
         if product_key in cart:
-            cart[product_key]['quantity'] += 1
+            new_quantity = int(cart[product_key].get('quantity', 1)) + requested_quantity
+            if new_quantity > product.stock_level:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Only {product.stock_level} items available',
+                }, status=400)
+            cart[product_key]['quantity'] = new_quantity
         else:
+            if requested_quantity > product.stock_level:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Only {product.stock_level} items available',
+                }, status=400)
             cart[product_key] = {
                 'name': product.name,
                 'price': float(product.discount_price),
                 'image': product.image.url if product.image else '',
-                'quantity': 1,
+                'quantity': requested_quantity,
                 'product_id': product_id
             }
         
@@ -962,7 +1138,7 @@ def add_to_cart_view(request, product_id):
         request.session.modified = True
         
         # Log cart interaction
-        log_interaction(request.user, product_id, 'cart')
+        log_interaction(request.user, product_id, 'cart', count_increment=requested_quantity)
         
         # Calculate cart count
         cart_count = sum(item['quantity'] for item in cart.values())
@@ -1029,6 +1205,28 @@ def view_cart_view(request):
     remaining_for_free = max(0, round(2000 - subtotal, 2))
     delivery_fee = 0 if subtotal >= 2000 else 150
     total = subtotal - discount + delivery_fee
+    cart_product_ids = {item['product_id'] for item in cart_items}
+    checkout_product_id = next(
+        (item['product_id'] for item in cart_items if item.get('stock_level', 0) > 0),
+        None
+    )
+
+    actor_kwargs = _get_actor_recommendation_kwargs(request)
+    recommended_products = _dedupe_products(
+        get_recommendations(limit=6, **actor_kwargs),
+        limit=6,
+        exclude_ids=cart_product_ids,
+    )
+    if not recommended_products:
+        recommended_products = _get_trending_products(limit=6, exclude_ids=cart_product_ids)
+
+    recently_viewed_products = _get_recently_viewed_products(
+        request,
+        limit=6,
+        exclude_ids=cart_product_ids,
+    )
+    trending_products = _get_trending_products(limit=6, exclude_ids=cart_product_ids)
+    recommended_ids = [product.product_id for product in recommended_products]
 
     context = {
         'cart_items': cart_items,
@@ -1039,6 +1237,11 @@ def view_cart_view(request):
         'total': round(total, 2),
         'remaining_for_free': remaining_for_free,
         'total_items': total_items,
+        'checkout_product_id': checkout_product_id,
+        'recommended_products': recommended_products,
+        'recommended_ids': recommended_ids,
+        'trending_products': trending_products,
+        'recently_viewed_products': recently_viewed_products,
     }
     
     return render(request, 'orders/cart.html', context)
@@ -1079,8 +1282,15 @@ def remove_from_cart_view(request, product_id):
 
 @login_required
 def place_order_view(request, product_id):
-    """Place order for a product"""
-    product = get_object_or_404(Product, product_id=product_id, is_available=True)
+    """Place order for a product."""
+    product = Product.objects.select_related('category').filter(
+        product_id=product_id,
+        is_available=True,
+    ).first()
+    if not product:
+        messages.error(request, 'Product is unavailable.')
+        return redirect('store:product_list')
+
     token_key = _order_submission_session_key(product_id)
 
     if request.method == 'POST':
@@ -1106,7 +1316,7 @@ def place_order_view(request, product_id):
                     ).first()
                     if not locked_product:
                         messages.error(request, 'Product is unavailable.')
-                        return redirect('store:product_list')
+                        return redirect('store:place_order', product_id=product_id)
 
                     if locked_product.stock_level < quantity:
                         messages.error(request, f'Only {locked_product.stock_level} items available in stock.')
@@ -1119,19 +1329,17 @@ def place_order_view(request, product_id):
                     order.save()
 
                     locked_product.stock_level -= quantity
-                    if locked_product.stock_level < 0:
-                        messages.error(request, 'Unable to place order due to stock conflict.')
-                        return redirect('store:place_order', product_id=product_id)
                     locked_product.save(update_fields=['stock_level'])
 
                     # Single source of truth: purchase interaction is logged only here.
                     log_interaction(request.user, product_id, 'purchase')
 
-                    cart = request.session.get('cart', {})
-                    if str(product_id) in cart:
-                        del cart[str(product_id)]
-                        request.session['cart'] = cart
-                        request.session.modified = True
+                # Clear cart only after successful order transaction.
+                cart = request.session.get('cart', {})
+                if str(product_id) in cart:
+                    del cart[str(product_id)]
+                    request.session['cart'] = cart
+                    request.session.modified = True
 
                 # Trigger recommendation refresh after successful commit path only.
                 try:
@@ -1290,9 +1498,10 @@ def admin_dashboard_view(request):
         'user', 'product'
     ).order_by('-ordered_at')[:10]
     
-    # Top 5 products by order count
+    # Top 5 products by order count + revenue
     top_products = Product.objects.annotate(
-        order_count=Count('order')
+        order_count=Count('order'),
+        total_revenue=Sum('order__total_price'),
     ).order_by('-order_count')[:5]
     
     # Top 5 users by purchase amount
@@ -1304,6 +1513,25 @@ def admin_dashboard_view(request):
     category_data = Category.objects.annotate(
         product_count=Count('products')
     ).values('name', 'product_count')
+
+    pending_orders = Order.objects.filter(status='pending').count()
+
+    # Last six rolling 30-day windows for revenue trend (oldest to newest)
+    revenue_data = []
+    for window_index in range(5, -1, -1):
+        window_start = timezone.now() - timedelta(days=(window_index + 1) * 30)
+        window_end = timezone.now() - timedelta(days=window_index * 30)
+        window_total = Order.objects.filter(
+            ordered_at__gte=window_start,
+            ordered_at__lt=window_end,
+        ).aggregate(total=Sum('total_price'))['total'] or 0
+        revenue_data.append(float(window_total))
+
+    status_order = ['pending', 'confirmed', 'shipped', 'delivered']
+    orders_by_status = [
+        Order.objects.filter(status=status).count()
+        for status in status_order
+    ]
     
     context = {
         'total_users': total_users,
@@ -1314,6 +1542,9 @@ def admin_dashboard_view(request):
         'top_products': top_products,
         'top_users': top_users,
         'category_data': list(category_data),
+        'pending_orders': pending_orders,
+        'revenue_data': revenue_data,
+        'orders_by_status': orders_by_status,
     }
     
     return render(request, 'admin_panel/dashboard.html', context)

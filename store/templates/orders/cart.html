@@ -15,6 +15,7 @@
 </div>
 
 <div class="container my-5">
+    <div id="cart-action-state" class="alert d-none mb-4" role="status" aria-live="polite"></div>
     {% if cart_items %}
     <div class="row g-4">
         <!-- Left: Cart Items -->
@@ -27,7 +28,8 @@
                             <!-- Product Image -->
                             <div class="col-md-2 col-3">
                                 {% if item.image %}
-                                <img src="{{ item.image }}" alt="{{ item.name }}" 
+                                <img src="{{ item.image }}" alt="{{ item.name|default:'Cart product image' }}"
+                                     loading="lazy" decoding="async"
                                      class="img-fluid rounded" style="max-height: 80px; object-fit: cover;">
                                 {% else %}
                                 <div class="d-flex align-items-center justify-content-center rounded" 
@@ -59,14 +61,16 @@
                             <!-- Quantity Controls -->
                             <div class="col-md-2 col-4 text-center">
                                 <div class="input-group input-group-sm">
-                                    <button class="btn btn-outline-secondary" type="button" 
+                                    <button class="btn btn-outline-secondary" type="button"
+                                            aria-label="Decrease quantity"
                                             onclick="updateQuantity({{ item.product_id }}, {{ item.quantity|add:'-1' }})">
                                         <i class="fas fa-minus"></i>
                                     </button>
                                     <input type="number" class="form-control text-center" 
                                            value="{{ item.quantity }}" min="1" max="{{ item.stock_level }}" 
                                            id="qty-{{ item.product_id }}" readonly>
-                                    <button class="btn btn-outline-secondary" type="button" 
+                                    <button class="btn btn-outline-secondary" type="button"
+                                            aria-label="Increase quantity"
                                             onclick="updateQuantity({{ item.product_id }}, {{ item.quantity|add:'1' }})"
                                             {% if item.quantity >= item.stock_level %}disabled{% endif %}>
                                         <i class="fas fa-plus"></i>
@@ -79,7 +83,8 @@
                                 <p class="fw-bold text-primary mb-2">
                                     {{ item.price|multiply:item.quantity|currency }}
                                 </p>
-                                <button class="btn btn-sm btn-outline-danger" 
+                                <button type="button" class="btn btn-sm btn-outline-danger"
+                                        aria-label="Remove {{ item.name }} from cart"
                                         onclick="removeFromCart({{ item.product_id }})">
                                     <i class="fas fa-trash"></i>
                                 </button>
@@ -140,9 +145,15 @@
                     </div>
 
                     <!-- Checkout Button -->
-                    <a href="{% url 'store:product_list' %}" class="btn btn-success btn-lg w-100 mb-2">
+                    {% if checkout_product_id %}
+                    <a href="{% url 'store:place_order' product_id=checkout_product_id %}" class="btn btn-success btn-lg w-100 mb-2">
                         <i class="fas fa-check-circle me-2"></i>Proceed to Checkout
                     </a>
+                    {% else %}
+                    <button type="button" class="btn btn-secondary btn-lg w-100 mb-2" disabled>
+                        <i class="fas fa-times-circle me-2"></i>Checkout Unavailable
+                    </button>
+                    {% endif %}
                     <a href="{% url 'store:product_list' %}" class="btn btn-outline-primary w-100">
                         <i class="fas fa-arrow-left me-2"></i>Continue Shopping
                     </a>
@@ -193,11 +204,70 @@
         {% endif %}
     </div>
     {% endif %}
+
+    {% if recommended_products %}
+    <div class="mt-5">
+        <h4 class="fw-bold mb-3">
+            <i class="fas fa-robot text-primary me-2"></i>Recommended for You
+        </h4>
+        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
+            {% for product in recommended_products %}
+            <div class="col">
+                {% include 'partials/product_card.html' with product=product recommended_ids=recommended_ids %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if recently_viewed_products %}
+    <div class="mt-5">
+        <h4 class="fw-bold mb-3">
+            <i class="fas fa-history text-secondary me-2"></i>Recently Viewed
+        </h4>
+        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
+            {% for product in recently_viewed_products %}
+            <div class="col">
+                {% include 'partials/product_card.html' with product=product recommended_ids=recommended_ids %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if trending_products %}
+    <div class="mt-5">
+        <h4 class="fw-bold mb-3">
+            <i class="fas fa-fire text-danger me-2"></i>Trending Products
+        </h4>
+        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
+            {% for product in trending_products %}
+            <div class="col">
+                {% include 'partials/product_card.html' with product=product recommended_ids=recommended_ids %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+function setCartState(kind, message) {
+    const el = document.getElementById('cart-action-state');
+    if (!el) return;
+    el.classList.remove('d-none', 'alert-info', 'alert-success', 'alert-danger');
+    if (kind === 'loading') {
+        el.classList.add('alert-info');
+    } else if (kind === 'success') {
+        el.classList.add('alert-success');
+    } else {
+        el.classList.add('alert-danger');
+    }
+    el.textContent = message;
+}
+
 function updateQuantity(productId, newQuantity) {
     if (newQuantity < 1) {
         if (confirm('Remove this item from cart?')) {
@@ -205,6 +275,7 @@ function updateQuantity(productId, newQuantity) {
         }
         return;
     }
+    setCartState('loading', 'Updating cart...');
 
     fetch(`/cart/update/${productId}/`, {
         method: 'POST',
@@ -218,18 +289,22 @@ function updateQuantity(productId, newQuantity) {
     .then(r => r.json())
     .then(data => {
         if (data.status === 'success') {
+            setCartState('success', 'Cart updated.');
             location.reload();
         } else {
+            setCartState('error', data.message || 'Error updating quantity');
             alert(data.message || 'Error updating quantity');
         }
     })
     .catch(err => {
         console.error('Error:', err);
+        setCartState('error', 'Network error while updating cart.');
         alert('Network error. Please try again.');
     });
 }
 
 function removeFromCart(productId) {
+    setCartState('loading', 'Removing item from cart...');
     fetch(`/cart/remove/${productId}/`, {
         method: 'POST',
         headers: {
@@ -241,13 +316,16 @@ function removeFromCart(productId) {
     .then(r => r.json())
     .then(data => {
         if (data.status === 'success') {
+            setCartState('success', 'Item removed from cart.');
             location.reload();
         } else {
+            setCartState('error', data.message || 'Error removing item');
             alert(data.message || 'Error removing item');
         }
     })
     .catch(err => {
         console.error('Error:', err);
+        setCartState('error', 'Network error while removing item.');
         alert('Network error. Please try again.');
     });
 }

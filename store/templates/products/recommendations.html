@@ -100,12 +100,13 @@
 
 <!-- Recommendations Grid -->
 <div class="container my-5">
+    <div id="recommendationApiState" class="alert d-none" role="status"></div>
     {% if recommendations %}
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h3 class="fw-bold mb-0">
             <i class="fas fa-sparkles text-primary me-2"></i>Your Personalized Picks
         </h3>
-        <span class="badge bg-primary px-3 py-2">{{ recommendations|length }} recommendations</span>
+        <span class="badge bg-primary px-3 py-2">{{ total_recs }} recommendations</span>
     </div>
 
     <div class="row g-4" id="recommendationsGrid">
@@ -116,16 +117,17 @@
                 <div class="card-header bg-gradient text-white" style="background: linear-gradient(135deg, #6C63FF, #3F8EFC);">
                     <div class="d-flex justify-content-between align-items-center">
                         <small class="fw-bold">🤖 AI Match</small>
-                        <small class="fw-bold">{{ rec.score|floatformat:0 }}%</small>
+                        <small class="fw-bold">{{ rec.score_percentage }}%</small>
                     </div>
                     <div class="progress mt-2" style="height: 6px;">
-                        <div class="progress-bar bg-success" style="width: {{ rec.score }}%;"></div>
+                        <div class="progress-bar bg-success" style="width: {{ rec.score_percentage }}%;"></div>
                     </div>
                 </div>
 
                 <!-- Product Image -->
                 <div class="position-relative">
-                    <img src="{{ rec.product|product_image_url }}" alt="{{ rec.product.name }}" 
+                    <img src="{{ rec.product|product_image_url }}" alt="{{ rec.product.name|default:'Product image' }}"
+                         loading="lazy" decoding="async"
                          class="card-img-top" style="height: 200px; object-fit: cover;">
                     
                     <!-- Discount Badge -->
@@ -139,19 +141,9 @@
                 <div class="card-body">
                     <!-- Reason Badge -->
                     <div class="mb-2">
-                        {% if rec.reason == 'collaborative' %}
-                        <span class="badge bg-info text-white small">
-                            <i class="fas fa-users me-1"></i>Based on similar shoppers
-                        </span>
-                        {% elif rec.reason == 'content' %}
-                        <span class="badge bg-success text-white small">
-                            <i class="fas fa-history me-1"></i>Based on your history
-                        </span>
-                        {% else %}
                         <span class="badge bg-primary text-white small">
-                            <i class="fas fa-robot me-1"></i>Hybrid AI
+                            <i class="fas fa-robot me-1"></i>{{ rec.reason|default:"Recommended for you" }}
                         </span>
-                        {% endif %}
                     </div>
 
                     <!-- Category -->
@@ -185,20 +177,26 @@
 
                     <!-- Price -->
                     <div class="mb-3">
-                        {% if rec.product.is_on_discount and rec.product.original_price %}
-                        <div class="d-flex align-items-center gap-2">
-                            <h5 class="text-danger fw-bold mb-0">{{ rec.product.discount_price|currency }}</h5>
-                            <small class="text-muted text-decoration-line-through">{{ rec.product.price|currency }}</small>
-                        </div>
+                        {% if rec.product.price %}
+                            {% if rec.product.is_on_discount %}
+                            <div class="d-flex align-items-center gap-2">
+                                <h5 class="text-danger fw-bold mb-0">{{ rec.product.discount_price|currency }}</h5>
+                                <small class="text-muted text-decoration-line-through">
+                                    {{ rec.product.original_price|default:rec.product.price|currency }}
+                                </small>
+                            </div>
+                            {% else %}
+                            <h5 class="text-primary fw-bold mb-0">{{ rec.product.price|currency }}</h5>
+                            {% endif %}
                         {% else %}
-                        <h5 class="text-primary fw-bold mb-0">{{ rec.product.price|currency }}</h5>
+                        <h5 class="text-muted fw-bold mb-0">Price unavailable</h5>
                         {% endif %}
                     </div>
 
                     <!-- Action Buttons -->
                     <div class="d-flex gap-2">
                         {% if rec.product.stock_level > 0 %}
-                        <button onclick="addToCart({{ rec.product.product_id }})" class="btn btn-sm btn-primary flex-grow-1">
+                        <button type="button" onclick="addToCart({{ rec.product.product_id }}, 1, this)" class="btn btn-sm btn-primary flex-grow-1 btn-add-cart">
                             <i class="fas fa-cart-plus"></i>
                         </button>
                         {% else %}
@@ -206,7 +204,8 @@
                             <i class="fas fa-times-circle"></i>
                         </button>
                         {% endif %}
-                        <a href="{% url 'store:product_detail' pk=rec.product.product_id %}" class="btn btn-sm btn-outline-primary flex-grow-1">
+                        <a href="{% url 'store:product_detail' pk=rec.product.product_id %}" class="btn btn-sm btn-outline-primary flex-grow-1"
+                           onclick="trackInteraction({{ rec.product.product_id }}, 'click')">
                             View
                         </a>
                     </div>
@@ -260,6 +259,36 @@
     {% endif %}
 </div>
 
+{% if recently_viewed_products %}
+<div class="container my-5">
+    <h4 class="fw-bold mb-4">
+        <i class="fas fa-history text-secondary me-2"></i>Recently Viewed
+    </h4>
+    <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
+        {% for product in recently_viewed_products %}
+        <div class="col">
+            {% include 'partials/product_card.html' with product=product recommended_ids=recommended_ids %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if trending_products %}
+<div class="container my-5">
+    <h4 class="fw-bold mb-4">
+        <i class="fas fa-fire text-danger me-2"></i>Trending Products
+    </h4>
+    <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
+        {% for product in trending_products %}
+        <div class="col">
+            {% include 'partials/product_card.html' with product=product recommended_ids=recommended_ids %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <!-- Why Trust Our AI Section -->
 <div class="bg-light py-5 mt-5">
     <div class="container">
@@ -295,6 +324,51 @@
 
 {% block extra_js %}
 <script>
+function setRecommendationApiState(type, message) {
+    const stateEl = document.getElementById('recommendationApiState');
+    if (!stateEl) return;
+    stateEl.classList.remove('d-none', 'alert-info', 'alert-warning', 'alert-danger', 'alert-success');
+    if (type === 'loading') {
+        stateEl.classList.add('alert-info');
+    } else if (type === 'error') {
+        stateEl.classList.add('alert-danger');
+    } else if (type === 'fallback') {
+        stateEl.classList.add('alert-warning');
+    } else {
+        stateEl.classList.add('alert-success');
+    }
+    stateEl.textContent = message;
+}
+
+function syncRecommendationsFromApi() {
+    setRecommendationApiState('loading', 'Loading latest recommendations...');
+    fetch('{% url "store:api_recommendations" %}')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.success) {
+                throw new Error('API returned unsuccessful response');
+            }
+            if (!data.recommendations || data.recommendations.length === 0) {
+                setRecommendationApiState('fallback', 'No recommendations yet. Browse products to build your profile.');
+                return;
+            }
+            if (data.source === 'fallback') {
+                setRecommendationApiState('fallback', 'Showing fallback trending products while personalization warms up.');
+            } else {
+                setRecommendationApiState('ready', 'Recommendations are up to date.');
+            }
+        })
+        .catch(error => {
+            console.error('Recommendation API error:', error);
+            setRecommendationApiState('error', 'Could not load recommendation API. Showing server-rendered results.');
+        });
+}
+
 function refreshRecommendations() {
     const btn = document.getElementById('refreshBtn');
     const originalHTML = btn.innerHTML;
@@ -329,6 +403,8 @@ function refreshRecommendations() {
         btn.innerHTML = originalHTML;
     });
 }
+
+document.addEventListener('DOMContentLoaded', syncRecommendationsFromApi);
 </script>
 
 <style>
@@ -359,3 +435,4 @@ function refreshRecommendations() {
 }
 </style>
 {% endblock %}
+

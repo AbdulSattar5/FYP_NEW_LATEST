@@ -69,7 +69,13 @@ body {
 /* Mobile - no top bar */
 @media (max-width: 767px) {
   body {
-    padding-top: 114px; /* navbar (70px) + subbar (44px) = 114px */
+    padding-top: 70px; /* mobile navbar only, categories are in drawer */
+  }
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  body {
+    padding-top: 104px; /* top bar + main navbar (subbar hidden) */
   }
 }
 
@@ -81,8 +87,14 @@ body {
 
 @media (max-width: 767px) {
   .sticky-top {
-    top: 125px !important; /* mobile navbar height + small gap */
+    top: 84px !important; /* mobile navbar height + small gap */
     z-index: 900 !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  .sticky-top {
+    top: 116px !important;
   }
 }
 
@@ -290,6 +302,23 @@ a:hover {
   gap: 20px;
 }
 
+.navbar-mobile-menu-btn {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: transparent;
+  color: #fff;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.navbar-mobile-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 .navbar-top-link {
   color: white;
   cursor: pointer;
@@ -387,15 +416,24 @@ a:hover {
   }
   
   .navbar-top-links {
-    gap: 12px;
+    gap: 8px;
   }
   
-  .navbar-top-link .nav-line1 {
-    font-size: 10px;
+  .navbar-top .container {
+    gap: 8px;
   }
-  
+
+  .navbar-top-link {
+    padding: 6px;
+  }
+
+  .navbar-top-link .nav-line1,
   .navbar-top-link .nav-line2 {
-    font-size: 12px;
+    display: none;
+  }
+
+  .cart-link .fa-shopping-cart {
+    font-size: 1.15rem;
   }
 }
 
@@ -821,6 +859,18 @@ footer a:hover {
 .form-select:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 0.2rem rgba(108, 99, 255, 0.25);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.btn:focus-visible,
+.page-link:focus-visible,
+[role="button"]:focus-visible {
+  outline: 3px solid rgba(255, 153, 0, 0.65);
+  outline-offset: 2px;
 }
 
 /* PAGINATION */
@@ -2545,11 +2595,7 @@ footer a:hover {
   cursor: help;
 }
 
-/* Smooth Transitions */
-* {
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-}
-
-button, a, .btn {
+/* Smooth transitions only on interactive controls */
+button, a, .btn, .form-control, .form-select {
   transition: all 0.3s ease;
 }

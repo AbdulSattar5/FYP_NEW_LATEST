@@ -40,6 +40,13 @@
     <form method="POST" action="{% url 'store:place_order' product_id=product.product_id %}">
         {% csrf_token %}
         <input type="hidden" name="submission_token" value="{{ order_submission_token }}">
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">
+            {% for err in form.non_field_errors %}
+                <div>{{ err }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
         <div class="row g-4">
             <!-- Left: Delivery Form -->
             <div class="col-lg-7">
@@ -56,8 +63,11 @@
                                 Delivery Address <span class="text-danger">*</span>
                             </label>
                             <textarea name="delivery_address" id="delivery_address" 
-                                      class="form-control" rows="3" required 
+                                      class="form-control {% if form.delivery_address.errors %}is-invalid{% endif %}" rows="3" required
                                       placeholder="House/Flat No., Street, Area, Landmark">{{ form.delivery_address.value|default:'' }}</textarea>
+                            {% for err in form.delivery_address.errors %}
+                            <div class="invalid-feedback d-block">{{ err }}</div>
+                            {% endfor %}
                             <small class="text-muted">
                                 <i class="fas fa-info-circle me-1"></i>Please provide complete address for accurate delivery
                             </small>
@@ -68,7 +78,7 @@
                             <label for="city" class="form-label fw-bold">
                                 City <span class="text-danger">*</span>
                             </label>
-                            <select name="city" id="city" class="form-select" required>
+                            <select name="city" id="city" class="form-select {% if form.city.errors %}is-invalid{% endif %}" required>
                                 <option value="">Select City</option>
                                 <option value="Karachi" {% if form.city.value == 'Karachi' %}selected{% endif %}>Karachi</option>
                                 <option value="Lahore" {% if form.city.value == 'Lahore' %}selected{% endif %}>Lahore</option>
@@ -83,6 +93,9 @@
                                 <option value="Gujranwala" {% if form.city.value == 'Gujranwala' %}selected{% endif %}>Gujranwala</option>
                                 <option value="Other" {% if form.city.value == 'Other' %}selected{% endif %}>Other</option>
                             </select>
+                            {% for err in form.city.errors %}
+                            <div class="invalid-feedback d-block">{{ err }}</div>
+                            {% endfor %}
                         </div>
 
                         <!-- Phone Number -->
@@ -90,9 +103,12 @@
                             <label for="phone_number" class="form-label fw-bold">
                                 Phone Number <span class="text-danger">*</span>
                             </label>
-                            <input type="tel" name="phone_number" id="phone_number" class="form-control" 
+                            <input type="tel" name="phone_number" id="phone_number" class="form-control {% if form.phone_number.errors %}is-invalid{% endif %}"
                                    required placeholder="+92-300-0000000" 
                                    pattern="[0-9+\-\s]+" value="{{ form.phone_number.value|default:'' }}">
+                            {% for err in form.phone_number.errors %}
+                            <div class="invalid-feedback d-block">{{ err }}</div>
+                            {% endfor %}
                             <small class="text-muted">
                                 <i class="fas fa-phone me-1"></i>We'll call you for delivery confirmation
                             </small>
@@ -104,8 +120,11 @@
                                 Special Instructions (Optional)
                             </label>
                             <textarea name="notes" id="notes" 
-                                      class="form-control" rows="2" 
+                                      class="form-control {% if form.notes.errors %}is-invalid{% endif %}" rows="2" 
                                       placeholder="Any special delivery instructions...">{{ form.notes.value|default:'' }}</textarea>
+                            {% for err in form.notes.errors %}
+                            <div class="invalid-feedback d-block">{{ err }}</div>
+                            {% endfor %}
                         </div>
 
                         <!-- Location Helper -->
@@ -158,17 +177,20 @@
                             <label class="form-label fw-bold">Quantity:</label>
                             <div class="input-group">
                                 <button class="btn btn-outline-secondary" type="button" 
-                                        onclick="updateQty(-1)">
+                                        onclick="updateQty(-1)" aria-label="Decrease quantity">
                                     <i class="fas fa-minus"></i>
                                 </button>
                                 <input type="number" name="quantity" id="quantity" 
-                                       class="form-control text-center" value="{{ form.quantity.value|default:1 }}" 
+                                       class="form-control text-center {% if form.quantity.errors %}is-invalid{% endif %}" value="{{ form.quantity.value|default:1 }}" 
                                        min="1" max="{{ product.stock_level }}" readonly>
                                 <button class="btn btn-outline-secondary" type="button" 
-                                        onclick="updateQty(1)">
+                                        onclick="updateQty(1)" aria-label="Increase quantity">
                                     <i class="fas fa-plus"></i>
                                 </button>
                             </div>
+                            {% for err in form.quantity.errors %}
+                            <div class="invalid-feedback d-block">{{ err }}</div>
+                            {% endfor %}
                             <small class="text-muted">
                                 Available: {{ product.stock_level }} units
                             </small>
@@ -184,7 +206,7 @@
                         <div class="mb-2">
                             <div class="d-flex justify-content-between">
                                 <span>Quantity:</span>
-                                <span class="fw-bold" id="qty-display">1</span>
+                                <span class="fw-bold" id="qty-display">{{ form.quantity.value|default:1 }}</span>
                             </div>
                         </div>
                         <div class="mb-3">
@@ -315,7 +337,7 @@ const unitPrice = {{ product.discount_price|default:0 }};
 
 function updateQty(change) {
     const qtyInput = document.getElementById('quantity');
-    let newQty = parseInt(qtyInput.value) + change;
+    let newQty = parseInt(qtyInput.value || '1', 10) + change;
     const maxQty = parseInt(qtyInput.max);
     
     if (newQty < 1) newQty = 1;
@@ -327,5 +349,9 @@ function updateQty(change) {
     const total = unitPrice * newQty;
     document.getElementById('total-price').textContent = 'Rs. ' + total.toLocaleString();
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    updateQty(0);
+});
 </script>
 {% endblock %}

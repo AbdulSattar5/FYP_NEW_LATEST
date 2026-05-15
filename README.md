@@ -1,220 +1,104 @@
-# 🤖 AI Shop - AI-Powered Personalized Product Platform
+# AI product store (Django)
 
-## Project by: Ayesha Khan (S23BINFT1M01014)
-**IUB — Dept. of IT — Supervisor: Ms. Sara Farid**
+E-commerce-style storefront with session cart, orders, interaction tracking, and a TF–IDF / popularity-aware recommender trained from your data.
 
----
+## Prerequisites
 
-## 🚀 Tech Stack
-- **Backend:** Django 4.2.16
-- **Database:** SQLite (upgradeable to PostgreSQL)
-- **ML Engine:** Scikit-learn (Collaborative + Content-Based + Hybrid)
-- **Frontend:** HTML5, CSS3, Bootstrap 5, JavaScript
-- **Image Storage:** Django MediaFiles
+- Python 3.10+
+- (Optional) Product CSV files in the project root for `import_products` — see `store/product_importer.py` for expected formats.
 
----
+## Environment setup
 
-## 📋 Setup Instructions
+Create and activate a virtual environment so dependencies do not clash with other tools on your machine:
 
-### 1. Virtual Environment (Already Created)
 ```bash
-python -m venv venv
-```
+python -m venv .venv
 
-### 2. Activate Virtual Environment
-**Windows:**
-```bash
-.\venv\Scripts\Activate.ps1
-```
+# Windows (PowerShell)
+.\.venv\Scripts\Activate.ps1
 
-**Linux/Mac:**
-```bash
-source venv/bin/activate
-```
+# Windows (cmd) / Linux / macOS
+# .venv\Scripts\activate   or   source .venv/bin/activate
 
-### 3. Install Dependencies (Already Installed)
-```bash
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4. Run Migrations (Next Step)
+Copy the example environment file and edit values:
+
 ```bash
-python manage.py makemigrations
+copy .env.example .env   # Windows
+# cp .env.example .env    # Linux / macOS
+```
+
+### `.env` variables
+
+| Variable | Purpose |
+|----------|---------|
+| `SECRET_KEY` | Django secret. Required when `DEBUG=false`. |
+| `DEBUG` | `true` / `false` (default in code: `true` if unset). |
+| `ALLOWED_HOSTS` | Comma-separated hostnames (no spaces). |
+| `CLOUDINARY_*` | Optional; all three must be set to enable Cloudinary SDK config. |
+| `USE_CLOUDINARY_STORAGE` | `true` to use Cloudinary as default file storage for uploads. |
+
+See `.env.example` for a template.
+
+## Database migrations
+
+```bash
 python manage.py migrate
 ```
 
-### 5. Create Superuser
-```bash
-python manage.py createsuperuser
-```
+## Import products
 
-### 6. Run Development Server
-```bash
-python manage.py runserver
-```
-
-Visit: http://127.0.0.1:8000/
-
----
-
-## 📁 Project Structure
-
-```
-ai_product_platform/
-│
-├── ai_product_platform/          # Main project settings
-│   ├── settings.py               # ✅ Configured
-│   ├── urls.py                   # ✅ Configured
-│   ├── wsgi.py
-│   └── asgi.py
-│
-├── store/                        # Main app
-│   ├── models.py                 # ⏳ PROMPT 2
-│   ├── views.py                  # ⏳ PROMPT 5
-│   ├── forms.py                  # ⏳ PROMPT 4
-│   ├── urls.py                   # ✅ Basic setup
-│   ├── admin.py                  # ⏳ PROMPT 2
-│   ├── signals.py                # ⏳ PROMPT 2
-│   ├── recommendation_engine.py  # ⏳ PROMPT 3
-│   │
-│   ├── management/commands/      # ✅ Created
-│   ├── templates/                # ✅ Created
-│   └── templatetags/             # ✅ Created
-│
-├── static/                       # ✅ Created
-│   ├── css/style.css
-│   ├── js/main.js
-│   └── images/
-│
-├── media/                        # ✅ Created (for product images)
-│
-├── venv/                         # ✅ Virtual environment
-├── manage.py
-└── requirements.txt              # ✅ Created
-
-```
-
----
-
-## ✅ PROMPT 1 - COMPLETED
-
-### What Was Created:
-1. ✅ Virtual environment setup
-2. ✅ All required packages installed
-3. ✅ Django project created
-4. ✅ Store app created
-5. ✅ Complete folder structure
-6. ✅ Settings.py fully configured
-7. ✅ Main URLs configured with MEDIA serving
-8. ✅ Apps.py configured with signals
-9. ✅ Placeholder files for future prompts
-
-### Key Configurations:
-- **INSTALLED_APPS:** Added store, crispy_forms, crispy_bootstrap5
-- **MIDDLEWARE:** Added WhiteNoiseMiddleware for static files
-- **TEMPLATES:** Configured to use store/templates
-- **STATIC_URL & MEDIA_URL:** Properly configured
-- **LOGIN/LOGOUT URLs:** Set up
-- **MESSAGE_TAGS:** Bootstrap 5 classes
-- **SESSION:** 2 weeks expiry
-
-### Critical Setup:
-```python
-# In main urls.py - MANDATORY for image display
-urlpatterns = [
-    path('django-admin/', admin.site.urls),
-    path('', include('store.urls', namespace='store')),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-```
-
----
-
-## 📝 Next Steps
-
-### PROMPT 2 - Database Models
-- Create all 7 models (Category, Product, UserInteraction, Recommendation, Order, Feedback, UserProfile)
-- Set up signals
-- Configure admin panel
-
-### PROMPT 3 - AI Recommendation Engine
-- Build ML engine with scikit-learn
-- Implement Collaborative Filtering
-- Implement Content-Based Filtering
-- Create Hybrid recommendation system
-
----
-
-## 🔧 Useful Commands
+Requires a compatible CSV in the project root (auto-detects cleaned / products / UK format). Optional category file `amazon_categories.csv` helps UK imports.
 
 ```bash
-# Check project
-python manage.py check
-
-# Make migrations
-python manage.py makemigrations
-
-# Apply migrations
-python manage.py migrate
-
-# Create superuser
-python manage.py createsuperuser
-
-# Run server
-python manage.py runserver
-
-# Import real products from CSV
 python manage.py import_products
+# Options: --source auto|cleaned|products|uk --clear --limit N
+```
 
-# Clear and re-import safely
-python manage.py import_products --clear
+## Train recommender and generate recommendations
 
-# Generate recommendations (after PROMPT 3)
+Artifacts are written under `models/recommender/` (ignored by git by default).
+
+```bash
+python manage.py train_recommender
 python manage.py generate_recommendations
 ```
 
-## 📦 Product Import
+Options are documented on each command (`--help`).
+
+## Run the development server
 
 ```bash
-# Verify imported data
-python manage.py shell
+python manage.py runserver
 ```
 
-```python
-from store.models import Product, Category
-print(Product.objects.count())
-print(Category.objects.count())
+Visit `http://127.0.0.1:8000/`. Use `django-admin/` for the built-in admin (create a superuser with `python manage.py createsuperuser`).
+
+## Run tests
+
+```bash
+python manage.py check
+python manage.py makemigrations --check
+python manage.py test
 ```
 
-If you need a repeat import, use `python manage.py import_products --clear` first.  
-The importer reads the real CSV files from `BASE_DIR` and updates existing products instead of duplicating them.
+The suite covers APIs (search suggestions, track, cart, recommendations), checkout and idempotency, product import (minimal CSV), templates, and the recommender pipeline (`store/test_recommender_pipeline.py`).
 
----
+## Deployment notes
 
-## 📦 Installed Packages
+1. **Never commit** `.env`, `db.sqlite3`, virtualenv folders, or generated `models/recommender/` artifacts.
+2. Set `DEBUG=false`, set a strong `SECRET_KEY`, and set `ALLOWED_HOSTS` to your domain(s).
+3. Use a production database (PostgreSQL, etc.) instead of SQLite when handling real traffic.
+4. Collect static files: `python manage.py collectstatic` (WhiteNoise is enabled).
+5. Regenerate recommender artifacts on the server after significant new interaction/product data.
+6. If you use Cloudinary, set all three Cloudinary variables and optionally `USE_CLOUDINARY_STORAGE=true`.
+7. Rotating credentials: the previous Cloudinary keys that were hard-coded in settings have been removed; create new keys in the Cloudinary dashboard if those were ever exposed.
 
-- Django 4.2.16
-- Pillow (for images)
-- scikit-learn (for ML)
-- pandas (for data manipulation)
-- numpy (for numerical operations)
-- django-crispy-forms
-- crispy-bootstrap5
-- whitenoise (for static files)
+## Project layout (high level)
 
----
-
-## 🎯 Project Goals
-
-1. ✅ Full-stack e-commerce platform
-2. ⏳ AI-powered product recommendations
-3. ⏳ User behavior tracking
-4. ⏳ Machine Learning integration
-5. ⏳ Professional UI/UX
-6. ⏳ Admin dashboard
-7. ⏳ Order management
-8. ⏳ Product reviews & ratings
-
----
-
-**Status:** PROMPT 1 ✅ COMPLETED
-**Next:** PROMPT 2 - Database Models & Signals
+- `ai_product_platform/` — Django settings and root URLs
+- `store/` — models, views, templates, recommender engine, management commands
+- `static/`, `media/` — static assets and user/media uploads in development

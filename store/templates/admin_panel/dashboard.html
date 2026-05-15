@@ -196,9 +196,9 @@
                                         </td>
                                         <td>{{ order.ordered_at|date:"M d, Y" }}</td>
                                         <td>
-                                            <button class="btn btn-sm btn-outline-primary">
+                                            <a href="{% url 'store:admin_orders' %}?q={{ order.order_id }}" class="btn btn-sm btn-outline-primary">
                                                 <i class="fas fa-eye"></i>
-                                            </button>
+                                            </a>
                                         </td>
                                     </tr>
                                     {% empty %}
@@ -270,15 +270,15 @@
                             <a href="{% url 'store:admin_add_product' %}" class="btn btn-primary">
                                 <i class="fas fa-plus me-2"></i>Add New Product
                             </a>
-                            <button class="btn btn-outline-primary" onclick="generateReport()">
-                                <i class="fas fa-file-download me-2"></i>Generate Report
-                            </button>
-                            <button class="btn btn-outline-success" onclick="regenerateRecs()">
-                                <i class="fas fa-robot me-2"></i>Regenerate AI Recommendations
-                            </button>
-                            <button class="btn btn-outline-info">
-                                <i class="fas fa-envelope me-2"></i>Send Newsletter
-                            </button>
+                            <a href="{% url 'store:admin_orders' %}" class="btn btn-outline-primary">
+                                <i class="fas fa-shopping-cart me-2"></i>Manage Orders
+                            </a>
+                            <a href="{% url 'store:admin_analytics' %}" class="btn btn-outline-success">
+                                <i class="fas fa-chart-line me-2"></i>View Analytics
+                            </a>
+                            <a href="{% url 'store:recommendations' %}" class="btn btn-outline-info">
+                                <i class="fas fa-robot me-2"></i>Preview Recommendations
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -411,7 +411,7 @@ if (revenueCtx) {
             labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
             datasets: [{
                 label: 'Revenue (Rs.)',
-                data: {{ revenue_data|default:"[12000, 19000, 15000, 25000, 22000, 30000]"|safe }},
+                data: {{ revenue_data|safe }},
                 borderColor: '#6C63FF',
                 backgroundColor: 'rgba(108, 99, 255, 0.1)',
                 tension: 0.4,
@@ -435,7 +435,7 @@ if (ordersCtx) {
         data: {
             labels: ['Pending', 'Confirmed', 'Shipped', 'Delivered'],
             datasets: [{
-                data: {{ orders_by_status|default:"[10, 15, 8, 25]"|safe }},
+                data: {{ orders_by_status|safe }},
                 backgroundColor: ['#F8961E', '#3F8EFC', '#6C63FF', '#43AA8B']
             }]
         },
@@ -444,16 +444,6 @@ if (ordersCtx) {
             maintainAspectRatio: true
         }
     });
-}
-
-function regenerateRecs() {
-    if (confirm('Regenerate AI recommendations for all users? This may take a few minutes.')) {
-        alert('Recommendation generation started in background!');
-    }
-}
-
-function generateReport() {
-    alert('Report generation feature coming soon!');
 }
 </script>
 {% endblock %}
