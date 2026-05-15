@@ -59,3 +59,9 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+amazon_products.csv
+amz_uk_processed_data.csv
+*.csv
+data/
+datasets/
