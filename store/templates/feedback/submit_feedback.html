@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+{% load static store_tags %}
+
+{% block title %}Submit Review - AI Shop{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="bg-light py-4">
+    <div class="container">
+        <h2 class="fw-bold mb-1">
+            <i class="fas fa-star me-2"></i>Submit Your Review
+        </h2>
+        <p class="text-muted mb-0">Share your experience with this product</p>
+    </div>
+</div>
+
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Product Summary Card -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-3 text-center mb-3 mb-md-0">
+                            <img src="{{ product|product_image_url }}" alt="{{ product.name }}" 
+                                 class="img-fluid rounded" style="max-height: 150px; object-fit: cover;">
+                        </div>
+                        <div class="col-md-9">
+                            <h4 class="fw-bold mb-2">{{ product.name }}</h4>
+                            <p class="text-muted mb-2">
+                                <i class="fas fa-tag me-1"></i>{{ product.category.name }}
+                            </p>
+                            <div class="text-warning mb-2">
+                                {% for i in product.rating|star_range %}
+                                {% if i <= product.rating %}
+                                <i class="fas fa-star"></i>
+                                {% else %}
+                                <i class="far fa-star"></i>
+                                {% endif %}
+                                {% endfor %}
+                                <span class="text-muted ms-2">({{ product.rating|floatformat:1 }} average rating)</span>
+                            </div>
+                            <p class="mb-0">
+                                <span class="badge bg-light text-dark">
+                                    <i class="fas fa-check-circle text-success me-1"></i>Purchased
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Review Form -->
+            {% if existing_feedback %}
+            <!-- Show Existing Review -->
+            <div class="card shadow-sm border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-check-circle me-2"></i>Your Review
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Your Rating:</label>
+                        <div class="text-warning" style="font-size: 1.5rem;">
+                            {% for i in existing_feedback.rating|star_range %}
+                            {% if i <= existing_feedback.rating %}
+                            <i class="fas fa-star"></i>
+                            {% else %}
+                            <i class="far fa-star"></i>
+                            {% endif %}
+                            {% endfor %}
+                            <span class="text-dark ms-2">({{ existing_feedback.rating }}/5)</span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Your Review:</label>
+                        <p class="mb-0">{{ existing_feedback.comment }}</p>
+                    </div>
+                    <div class="text-muted small">
+                        <i class="fas fa-clock me-1"></i>Submitted on {{ existing_feedback.created_at|date:"F d, Y" }}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <!-- Review Form -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-edit me-2"></i>Write Your Review
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{% url 'store:submit_feedback' product_id=product.product_id %}">
+                        {% csrf_token %}
+                        
+                        <!-- Star Rating -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                Your Rating <span class="text-danger">*</span>
+                            </label>
+                            <div class="star-rating-input" id="starRatingInput">
+                                <i class="far fa-star rating-star" data-value="1"></i>
+                                <i class="far fa-star rating-star" data-value="2"></i>
+                                <i class="far fa-star rating-star" data-value="3"></i>
+                                <i class="far fa-star rating-star" data-value="4"></i>
+                                <i class="far fa-star rating-star" data-value="5"></i>
+                            </div>
+                            <input type="hidden" name="rating" id="rating-input" required>
+                            <small class="text-muted d-block mt-2">
+                                <i class="fas fa-info-circle me-1"></i>Click on the stars to rate
+                            </small>
+                        </div>
+
+                        <!-- Review Comment -->
+                        <div class="mb-4">
+                            <label for="comment" class="form-label fw-bold">
+                                Your Review <span class="text-danger">*</span>
+                            </label>
+                            <textarea name="comment" id="comment" class="form-control" 
+                                      rows="6" required 
+                                      placeholder="Share your experience with this product. What did you like or dislike? Would you recommend it to others?"></textarea>
+                            <small class="text-muted">
+                                <i class="fas fa-pen me-1"></i>Minimum 10 characters
+                            </small>
+                        </div>
+
+                        <!-- Info Box -->
+                        <div class="alert alert-info d-flex align-items-start">
+                            <i class="fas fa-lightbulb fa-2x me-3 mt-1"></i>
+                            <div>
+                                <strong>Your review helps others!</strong>
+                                <p class="mb-0 small">
+                                    Share honest feedback to help other shoppers make informed decisions. 
+                                    Your review will be visible to all users.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="d-flex gap-3">
+                            <button type="submit" class="btn btn-primary btn-lg flex-grow-1">
+                                <i class="fas fa-paper-plane me-2"></i>Submit Review
+                            </button>
+                            <a href="{% url 'store:order_history' %}" class="btn btn-outline-secondary btn-lg">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Review Guidelines -->
+            <div class="card shadow-sm mt-4 border-0 bg-light">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">
+                        <i class="fas fa-clipboard-list me-2"></i>Review Guidelines
+                    </h6>
+                    <ul class="mb-0 small">
+                        <li class="mb-2">Be honest and specific about your experience</li>
+                        <li class="mb-2">Focus on the product's features, quality, and value</li>
+                        <li class="mb-2">Avoid offensive language or personal attacks</li>
+                        <li class="mb-2">Don't include personal information (phone, email, address)</li>
+                        <li class="mb-0">Reviews are moderated and may take 24 hours to appear</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.star-rating-input {
+    font-size: 3rem;
+    cursor: pointer;
+}
+
+.rating-star {
+    color: #dee2e6;
+    transition: all 0.2s ease;
+}
+
+.rating-star:hover,
+.rating-star.active {
+    color: #FFD700;
+    transform: scale(1.1);
+}
+
+.rating-star.fas {
+    color: #FFD700;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const stars = document.querySelectorAll('.rating-star');
+    const ratingInput = document.getElementById('rating-input');
+    let selectedRating = 0;
+
+    stars.forEach(star => {
+        // Click event
+        star.addEventListener('click', function() {
+            selectedRating = parseInt(this.getAttribute('data-value'));
+            ratingInput.value = selectedRating;
+            updateStars(selectedRating);
+        });
+
+        // Hover event
+        star.addEventListener('mouseenter', function() {
+            const hoverValue = parseInt(this.getAttribute('data-value'));
+            updateStars(hoverValue);
+        });
+    });
+
+    // Reset on mouse leave
+    document.getElementById('starRatingInput').addEventListener('mouseleave', function() {
+        updateStars(selectedRating);
+    });
+
+    function updateStars(rating) {
+        stars.forEach((star, index) => {
+            const starValue = parseInt(star.getAttribute('data-value'));
+            if (starValue <= rating) {
+                star.classList.remove('far');
+                star.classList.add('fas');
+            } else {
+                star.classList.remove('fas');
+                star.classList.add('far');
+            }
+        });
+    }
+});
+
+// Form validation
+document.querySelector('form').addEventListener('submit', function(e) {
+    const rating = document.getElementById('rating-input').value;
+    const comment = document.getElementById('comment').value;
+
+    if (!rating) {
+        e.preventDefault();
+        alert('Please select a rating!');
+        return false;
+    }
+
+    if (comment.length < 10) {
+        e.preventDefault();
+        alert('Please write at least 10 characters in your review!');
+        return false;
+    }
+});
+</script>
+{% endblock %}

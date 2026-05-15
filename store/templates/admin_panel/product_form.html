@@ -1,0 +1,249 @@
+{% extends 'base.html' %}
+{% load static store_tags %}
+
+{% block title %}{% if product %}Edit Product{% else %}Add Product{% endif %} - Admin{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2 class="fw-bold mb-1">
+                        <i class="fas fa-{% if product %}edit{% else %}plus{% endif %} me-2"></i>
+                        {% if product %}Edit Product{% else %}Add New Product{% endif %}
+                    </h2>
+                    <p class="text-muted mb-0">Fill in the product details below</p>
+                </div>
+                <a href="{% url 'store:admin_products' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Products
+                </a>
+            </div>
+
+            <!-- Form -->
+            <form method="POST" enctype="multipart/form-data" id="productForm">
+                {% csrf_token %}
+                
+                <div class="row g-4">
+                    <!-- Left Column -->
+                    <div class="col-lg-6">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-info-circle me-2"></i>Basic Information
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <!-- Product Name -->
+                                <div class="mb-3">
+                                    <label for="id_name" class="form-label fw-bold">
+                                        Product Name <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.name }}
+                                    {% if form.name.errors %}
+                                    <div class="text-danger small">{{ form.name.errors }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Category -->
+                                <div class="mb-3">
+                                    <label for="id_category" class="form-label fw-bold">
+                                        Category <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.category }}
+                                    {% if form.category.errors %}
+                                    <div class="text-danger small">{{ form.category.errors }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Description -->
+                                <div class="mb-3">
+                                    <label for="id_description" class="form-label fw-bold">
+                                        Description <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.description }}
+                                    {% if form.description.errors %}
+                                    <div class="text-danger small">{{ form.description.errors }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Attributes JSON -->
+                                <div class="mb-3">
+                                    <label for="id_attributes" class="form-label fw-bold">
+                                        Attributes (JSON)
+                                    </label>
+                                    <textarea name="attributes" id="id_attributes" class="form-control font-monospace" rows="4" placeholder='{"brand": "Samsung", "color": "Black", "warranty": "1 Year"}'>{% if product %}{{ product.attributes|safe }}{% endif %}</textarea>
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle me-1"></i>Enter valid JSON format
+                                    </small>
+                                    <div id="json-error" class="text-danger small mt-1" style="display:none;"></div>
+                                </div>
+
+                                <!-- Status Checkboxes -->
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Status</label>
+                                    <div class="form-check">
+                                        {{ form.is_available }}
+                                        <label class="form-check-label" for="id_is_available">
+                                            Is Available
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        {{ form.is_featured }}
+                                        <label class="form-check-label" for="id_is_featured">
+                                            Is Featured
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input type="checkbox" name="is_on_discount" id="id_is_on_discount" class="form-check-input" {% if product.is_on_discount %}checked{% endif %}>
+                                        <label class="form-check-label" for="id_is_on_discount">
+                                            Is On Discount
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column -->
+                    <div class="col-lg-6">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-dollar-sign me-2"></i>Pricing & Inventory
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <!-- Price -->
+                                <div class="mb-3">
+                                    <label for="id_price" class="form-label fw-bold">
+                                        Price (Rs.) <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.price }}
+                                    {% if form.price.errors %}
+                                    <div class="text-danger small">{{ form.price.errors }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Original Price -->
+                                <div class="mb-3">
+                                    <label for="id_original_price" class="form-label fw-bold">
+                                        Original Price (Rs.)
+                                    </label>
+                                    {{ form.original_price }}
+                                    <small class="text-muted d-block">Leave empty if no discount</small>
+                                </div>
+
+                                <!-- Discount Percentage -->
+                                <div class="mb-3" id="discount-field" style="display:none;">
+                                    <label for="id_discount_percentage" class="form-label fw-bold">
+                                        Discount Percentage (%)
+                                    </label>
+                                    {{ form.discount_percentage }}
+                                    <small class="text-muted d-block">Enter value between 0-100</small>
+                                </div>
+
+                                <!-- Stock Level -->
+                                <div class="mb-3">
+                                    <label for="id_stock_level" class="form-label fw-bold">
+                                        Stock Level <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.stock_level }}
+                                    {% if form.stock_level.errors %}
+                                    <div class="text-danger small">{{ form.stock_level.errors }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Image Upload -->
+                                <div class="mb-3">
+                                    <label for="id_image" class="form-label fw-bold">
+                                        Product Image
+                                    </label>
+                                    
+                                    <!-- Image Preview -->
+                                    <div class="mb-2">
+                                        <img src="{{ product|product_image_url }}" id="image-preview" 
+                                             class="img-fluid rounded" style="max-height: 200px; object-fit: cover;">
+                                    </div>
+                                    
+                                    {{ form.image }}
+                                    <small class="text-muted d-block">
+                                        <i class="fas fa-info-circle me-1"></i>Recommended: 800x800px, JPG/PNG
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Buttons -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="d-flex gap-3">
+                            <button type="submit" class="btn btn-primary btn-lg flex-grow-1">
+                                <i class="fas fa-save me-2"></i>
+                                {% if product %}Update Product{% else %}Create Product{% endif %}
+                            </button>
+                            <a href="{% url 'store:admin_products' %}" class="btn btn-outline-secondary btn-lg">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Image Preview
+document.getElementById('id_image').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('image-preview');
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+// Show/Hide Discount Field
+const discountCheckbox = document.getElementById('id_is_on_discount');
+const discountField = document.getElementById('discount-field');
+
+function toggleDiscountField() {
+    if (discountCheckbox.checked) {
+        discountField.style.display = 'block';
+    } else {
+        discountField.style.display = 'none';
+    }
+}
+
+discountCheckbox.addEventListener('change', toggleDiscountField);
+toggleDiscountField(); // Initial check
+
+// JSON Validation
+document.getElementById('productForm').addEventListener('submit', function(e) {
+    const attributesField = document.getElementById('id_attributes');
+    const jsonError = document.getElementById('json-error');
+    
+    if (attributesField.value.trim()) {
+        try {
+            JSON.parse(attributesField.value);
+            jsonError.style.display = 'none';
+        } catch (error) {
+            e.preventDefault();
+            jsonError.textContent = 'Invalid JSON format: ' + error.message;
+            jsonError.style.display = 'block';
+            attributesField.focus();
+        }
+    }
+});
+</script>
+{% endblock %}

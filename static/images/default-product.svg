@@ -1,0 +1,15 @@
+<svg width="800" height="800" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Default product image">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6C63FF"/>
+      <stop offset="100%" stop-color="#3F8EFC"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="800" rx="48" fill="url(#bg)"/>
+  <circle cx="400" cy="300" r="120" fill="#ffffff" fill-opacity="0.18"/>
+  <rect x="220" y="320" width="360" height="240" rx="32" fill="#ffffff" fill-opacity="0.92"/>
+  <path d="M280 360h240v32H280zm0 56h240v24H280zm0 44h160v24H280z" fill="#6C63FF"/>
+  <path d="M320 560l80-84 56 52 48-36 56 68H320z" fill="#3F8EFC" fill-opacity="0.28"/>
+  <path d="M308 338h184l-24-44H332z" fill="#FFB703" fill-opacity="0.9"/>
+  <text x="400" y="640" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" fill="#ffffff" fill-opacity="0.92">AI Shop Product</text>
+</svg>

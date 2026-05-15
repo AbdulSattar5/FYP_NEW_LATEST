@@ -1,0 +1,331 @@
+{% extends 'base.html' %}
+{% load static store_tags %}
+
+{% block title %}Place Order - AI Shop{% endblock %}
+
+{% block content %}
+<!-- Progress Bar -->
+<div class="bg-light py-3">
+    <div class="container">
+        <div class="progress-steps d-flex justify-content-center align-items-center">
+            <div class="step completed">
+                <div class="step-circle">
+                    <i class="fas fa-check"></i>
+                </div>
+                <span class="step-label">Cart</span>
+            </div>
+            <div class="step-line completed"></div>
+            <div class="step active">
+                <div class="step-circle">2</div>
+                <span class="step-label">Delivery Details</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">3</div>
+                <span class="step-label">Order Placed</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Page Header -->
+<div class="container mt-4">
+    <h2 class="fw-bold mb-1">
+        <i class="fas fa-shipping-fast me-2"></i>Delivery Details
+    </h2>
+    <p class="text-muted">Please provide your delivery information</p>
+</div>
+
+<div class="container my-4">
+    <form method="POST" action="{% url 'store:place_order' product_id=product.product_id %}">
+        {% csrf_token %}
+        <input type="hidden" name="submission_token" value="{{ order_submission_token }}">
+        <div class="row g-4">
+            <!-- Left: Delivery Form -->
+            <div class="col-lg-7">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-map-marker-alt me-2"></i>Shipping Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Delivery Address -->
+                        <div class="mb-3">
+                            <label for="delivery_address" class="form-label fw-bold">
+                                Delivery Address <span class="text-danger">*</span>
+                            </label>
+                            <textarea name="delivery_address" id="delivery_address" 
+                                      class="form-control" rows="3" required 
+                                      placeholder="House/Flat No., Street, Area, Landmark">{{ form.delivery_address.value|default:'' }}</textarea>
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>Please provide complete address for accurate delivery
+                            </small>
+                        </div>
+
+                        <!-- City -->
+                        <div class="mb-3">
+                            <label for="city" class="form-label fw-bold">
+                                City <span class="text-danger">*</span>
+                            </label>
+                            <select name="city" id="city" class="form-select" required>
+                                <option value="">Select City</option>
+                                <option value="Karachi" {% if form.city.value == 'Karachi' %}selected{% endif %}>Karachi</option>
+                                <option value="Lahore" {% if form.city.value == 'Lahore' %}selected{% endif %}>Lahore</option>
+                                <option value="Islamabad" {% if form.city.value == 'Islamabad' %}selected{% endif %}>Islamabad</option>
+                                <option value="Rawalpindi" {% if form.city.value == 'Rawalpindi' %}selected{% endif %}>Rawalpindi</option>
+                                <option value="Faisalabad" {% if form.city.value == 'Faisalabad' %}selected{% endif %}>Faisalabad</option>
+                                <option value="Multan" {% if form.city.value == 'Multan' %}selected{% endif %}>Multan</option>
+                                <option value="Bahawalpur" {% if form.city.value == 'Bahawalpur' %}selected{% endif %}>Bahawalpur</option>
+                                <option value="Peshawar" {% if form.city.value == 'Peshawar' %}selected{% endif %}>Peshawar</option>
+                                <option value="Quetta" {% if form.city.value == 'Quetta' %}selected{% endif %}>Quetta</option>
+                                <option value="Sialkot" {% if form.city.value == 'Sialkot' %}selected{% endif %}>Sialkot</option>
+                                <option value="Gujranwala" {% if form.city.value == 'Gujranwala' %}selected{% endif %}>Gujranwala</option>
+                                <option value="Other" {% if form.city.value == 'Other' %}selected{% endif %}>Other</option>
+                            </select>
+                        </div>
+
+                        <!-- Phone Number -->
+                        <div class="mb-3">
+                            <label for="phone_number" class="form-label fw-bold">
+                                Phone Number <span class="text-danger">*</span>
+                            </label>
+                            <input type="tel" name="phone_number" id="phone_number" class="form-control" 
+                                   required placeholder="+92-300-0000000" 
+                                   pattern="[0-9+\-\s]+" value="{{ form.phone_number.value|default:'' }}">
+                            <small class="text-muted">
+                                <i class="fas fa-phone me-1"></i>We'll call you for delivery confirmation
+                            </small>
+                        </div>
+
+                        <!-- Special Notes -->
+                        <div class="mb-3">
+                            <label for="notes" class="form-label fw-bold">
+                                Special Instructions (Optional)
+                            </label>
+                            <textarea name="notes" id="notes" 
+                                      class="form-control" rows="2" 
+                                      placeholder="Any special delivery instructions...">{{ form.notes.value|default:'' }}</textarea>
+                        </div>
+
+                        <!-- Location Helper -->
+                        <div class="alert alert-info d-flex align-items-center">
+                            <i class="fas fa-map-marked-alt fa-2x me-3"></i>
+                            <div>
+                                <strong>Tip:</strong> Make sure your address is complete and accurate to avoid delivery delays.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Order Summary -->
+            <div class="col-lg-5">
+                <div class="card shadow-sm sticky-top">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-receipt me-2"></i>Order Summary
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Product Info -->
+                        <div class="d-flex mb-3">
+                            <div class="me-3">
+                                <img src="{{ product|product_image_url }}" alt="{{ product.name }}" 
+                                     class="rounded" style="width: 80px; height: 80px; object-fit: cover;">
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="fw-bold mb-1">{{ product.name }}</h6>
+                                <p class="text-muted small mb-1">
+                                    <i class="fas fa-tag me-1"></i>{{ product.category.name|default:"Uncategorized" }}
+                                </p>
+                                <div class="text-warning small">
+                                    {% for i in product.rating|star_range %}
+                                    {% if i <= product.rating|default:0 %}
+                                    <i class="fas fa-star"></i>
+                                    {% else %}
+                                    <i class="far fa-star"></i>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <!-- Quantity Selector -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Quantity:</label>
+                            <div class="input-group">
+                                <button class="btn btn-outline-secondary" type="button" 
+                                        onclick="updateQty(-1)">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <input type="number" name="quantity" id="quantity" 
+                                       class="form-control text-center" value="{{ form.quantity.value|default:1 }}" 
+                                       min="1" max="{{ product.stock_level }}" readonly>
+                                <button class="btn btn-outline-secondary" type="button" 
+                                        onclick="updateQty(1)">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted">
+                                Available: {{ product.stock_level }} units
+                            </small>
+                        </div>
+
+                        <!-- Price Breakdown -->
+                        <div class="mb-2">
+                                <div class="d-flex justify-content-between">
+                                    <span>Unit Price:</span>
+                                    <span class="fw-bold">{{ product.discount_price|currency }}</span>
+                                </div>
+                        </div>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between">
+                                <span>Quantity:</span>
+                                <span class="fw-bold" id="qty-display">1</span>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Delivery Fee:</span>
+                                <span class="text-success fw-bold">FREE</span>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <!-- Total -->
+                        <div class="d-flex justify-content-between mb-3">
+                            <h5 class="mb-0">Total:</h5>
+                            <h5 class="mb-0 text-success" id="total-price">{{ product.discount_price|currency }}</h5>
+                        </div>
+
+                        <!-- Expected Delivery -->
+                        <div class="alert alert-success small py-2 mb-3">
+                            <i class="fas fa-truck me-1"></i>
+                            <strong>Expected Delivery:</strong> 3-5 business days
+                        </div>
+
+                        <!-- Place Order Button -->
+                        {% if product.stock_level > 0 %}
+                        <button type="submit" class="btn btn-success btn-lg w-100 mb-2">
+                            <i class="fas fa-check-circle me-2"></i>Place Order
+                        </button>
+                        {% else %}
+                        <button type="button" class="btn btn-secondary btn-lg w-100 mb-2" disabled>
+                            <i class="fas fa-times-circle me-2"></i>Out of Stock
+                        </button>
+                        {% endif %}
+                        <a href="{% url 'store:product_detail' pk=product.product_id %}" 
+                           class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Product
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.progress-steps {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.step-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #e9ecef;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.2rem;
+    margin-bottom: 8px;
+    transition: all 0.3s ease;
+}
+
+.step.active .step-circle {
+    background: linear-gradient(135deg, #6C63FF, #3F8EFC);
+    color: white;
+    box-shadow: 0 4px 12px rgba(108, 99, 255, 0.3);
+}
+
+.step.completed .step-circle {
+    background: #43AA8B;
+    color: white;
+}
+
+.step-label {
+    font-size: 0.85rem;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.step.active .step-label {
+    color: #6C63FF;
+    font-weight: 600;
+}
+
+.step-line {
+    width: 100px;
+    height: 3px;
+    background: #e9ecef;
+    margin: 0 10px;
+    margin-bottom: 30px;
+}
+
+.step-line.completed {
+    background: #43AA8B;
+}
+
+@media (max-width: 576px) {
+    .step-line {
+        width: 50px;
+    }
+    .step-label {
+        font-size: 0.7rem;
+    }
+    .step-circle {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const unitPrice = {{ product.discount_price|default:0 }};
+
+function updateQty(change) {
+    const qtyInput = document.getElementById('quantity');
+    let newQty = parseInt(qtyInput.value) + change;
+    const maxQty = parseInt(qtyInput.max);
+    
+    if (newQty < 1) newQty = 1;
+    if (newQty > maxQty) newQty = maxQty;
+    
+    qtyInput.value = newQty;
+    document.getElementById('qty-display').textContent = newQty;
+    
+    const total = unitPrice * newQty;
+    document.getElementById('total-price').textContent = 'Rs. ' + total.toLocaleString();
+}
+</script>
+{% endblock %}

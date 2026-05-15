@@ -1,0 +1,291 @@
+{% extends 'base.html' %}
+{% load static store_tags %}
+
+{% block title %}Product Management - AI Shop Admin{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/style.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    <!-- Sidebar -->
+    <aside class="admin-sidebar">
+        <div class="sidebar-header">
+            <h4 class="text-white fw-bold mb-0">
+                <i class="fas fa-bolt me-2"></i>AI Shop Admin
+            </h4>
+        </div>
+        
+        <nav class="sidebar-nav">
+            <a href="{% url 'store:admin_dashboard' %}" class="nav-item">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="{% url 'store:admin_products' %}" class="nav-item active">
+                <i class="fas fa-box"></i>
+                <span>Products</span>
+            </a>
+            <a href="{% url 'store:admin_users' %}" class="nav-item">
+                <i class="fas fa-users"></i>
+                <span>Users</span>
+            </a>
+            <a href="{% url 'store:admin_orders' %}" class="nav-item">
+                <i class="fas fa-shopping-cart"></i>
+                <span>Orders</span>
+            </a>
+            <a href="{% url 'store:admin_analytics' %}" class="nav-item">
+                <i class="fas fa-chart-line"></i>
+                <span>Analytics</span>
+            </a>
+            <a href="{% url 'store:home' %}" class="nav-item">
+                <i class="fas fa-arrow-left"></i>
+                <span>Back to Store</span>
+            </a>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="admin-main">
+        <div class="admin-header d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="fw-bold mb-1">Product Management</h2>
+                <p class="text-muted">Manage your product catalog</p>
+            </div>
+            <a href="{% url 'store:admin_add_product' %}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Add New Product
+            </a>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <div class="col-md-10">
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-search"></i>
+                            </span>
+                            <input type="text" name="q" class="form-control" 
+                                   placeholder="Search products by name, description, or category..." 
+                                   value="{{ search_query }}">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-search me-2"></i>Search
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Products Table -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-box me-2 text-primary"></i>
+                    Products ({{ page_obj.paginator.count }})
+                </h5>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-success" onclick="exportProducts()">
+                        <i class="fas fa-file-export me-1"></i>Export
+                    </button>
+                    <button class="btn btn-outline-primary" onclick="bulkActions()">
+                        <i class="fas fa-tasks me-1"></i>Bulk Actions
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th width="60">
+                                    <input type="checkbox" class="form-check-input" id="selectAll">
+                                </th>
+                                <th>Image</th>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th>Price</th>
+                                <th>Stock</th>
+                                <th>Rating</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in page_obj %}
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="form-check-input product-checkbox" 
+                                           value="{{ product.product_id }}">
+                                </td>
+                                <td>
+                                    <img src="{{ product|product_image_url }}" alt="{{ product.name }}" 
+                                         class="img-thumbnail" style="width: 50px; height: 50px; object-fit: cover;">
+                                </td>
+                                <td>
+                                    <div class="fw-bold">{{ product.name|truncatewords:8 }}</div>
+                                    <small class="text-muted">ID: {{ product.product_id }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ product.category.name }}</span>
+                                </td>
+                                <td class="fw-bold">{{ product.discount_price|currency }}</td>
+                                <td>
+                                    {% if product.stock_level > 10 %}
+                                    <span class="badge bg-success">{{ product.stock_level }} in stock</span>
+                                    {% elif product.stock_level > 0 %}
+                                    <span class="badge bg-warning text-dark">{{ product.stock_level }} left</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Out of stock</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-star text-warning me-1"></i>
+                                        <span>{{ product.rating|floatformat:1 }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if product.stock_level > 0 %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check-circle me-1"></i>Active
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">
+                                        <i class="fas fa-pause-circle me-1"></i>Inactive
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'store:product_detail' product.product_id %}" 
+                                           class="btn btn-outline-info" 
+                                           title="View" 
+                                           target="_blank">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{% url 'store:admin_edit_product' product.product_id %}" 
+                                           class="btn btn-outline-primary" 
+                                           title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <button class="btn btn-outline-danger" 
+                                                onclick="deleteProduct('{{ product.product_id }}', '{{ product.name|escapejs }}')"
+                                                title="Delete">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="9" class="text-center py-5">
+                                    <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                                    <p class="text-muted">No products found</p>
+                                    <a href="{% url 'store:admin_add_product' %}" class="btn btn-primary">
+                                        <i class="fas fa-plus me-2"></i>Add Your First Product
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+            <div class="card-footer bg-white">
+                <nav>
+                    <ul class="pagination justify-content-center mb-0">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}">
+                                <i class="fas fa-angle-double-left"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}">
+                                <i class="fas fa-angle-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        <li class="page-item active">
+                            <span class="page-link">
+                                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                            </span>
+                        </li>
+
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}">
+                                <i class="fas fa-angle-right"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}">
+                                <i class="fas fa-angle-double-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Select all checkbox
+document.getElementById('selectAll')?.addEventListener('change', function() {
+    const checkboxes = document.querySelectorAll('.product-checkbox');
+    checkboxes.forEach(cb => cb.checked = this.checked);
+});
+
+function deleteProduct(productId, productName) {
+    if (confirm(`Are you sure you want to delete "${productName}"? This action cannot be undone.`)) {
+        // Create form and submit
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin-panel/products/${productId}/delete/`;
+        
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                         '{{ csrf_token }}';
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = csrfToken;
+        
+        form.appendChild(csrfInput);
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function exportProducts() {
+    alert('Export functionality coming soon!');
+    // Implement CSV/Excel export
+}
+
+function bulkActions() {
+    const selected = document.querySelectorAll('.product-checkbox:checked');
+    if (selected.length === 0) {
+        alert('Please select at least one product');
+        return;
+    }
+    
+    const action = prompt('Enter action (delete/activate/deactivate):');
+    if (action) {
+        alert(`Bulk ${action} for ${selected.length} products`);
+        // Implement bulk actions
+    }
+}
+</script>
+{% endblock %}

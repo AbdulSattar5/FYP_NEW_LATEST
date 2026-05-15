@@ -1,0 +1,122 @@
+{% load static store_tags %}
+
+<!-- Amazon-Style Top Bar (Contact Info - Desktop Only) -->
+<div class="top-bar bg-dark text-white d-none d-md-block">
+    <div class="container">
+        <div class="row align-items-center" style="height: 36px;">
+            <div class="col-md-6">
+                <small style="font-size: 12px;">
+                    <i class="fas fa-phone me-2"></i>+92-300-0000000
+                    <span class="mx-2">|</span>
+                    <i class="fas fa-envelope me-2"></i>support@aishop.com
+                </small>
+            </div>
+            <div class="col-md-6 text-end">
+                <small style="font-size: 12px;">
+                    <i class="fas fa-shipping-fast me-2"></i>Free shipping on orders over Rs. 2000!
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Amazon-Style Main Navbar (Fixed) -->
+<nav class="navbar-top">
+    <div class="container">
+        <!-- Logo -->
+        <a class="navbar-logo" href="{% url 'store:home' %}">
+            <i class="fas fa-bolt"></i> AI <span>Shop</span>
+        </a>
+        
+        <!-- Search Bar (Amazon-style) -->
+        <form class="navbar-search-bar" action="{% url 'store:search' %}" method="GET">
+            <select name="category" class="d-none d-md-block">
+                <option value="">All</option>
+                {% for category in all_categories %}
+                <option value="{{ category.slug }}">{{ category.name }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" name="q" placeholder="Search products..." id="main-search-input" autocomplete="off">
+            <button type="submit">
+                <i class="fas fa-search"></i>
+            </button>
+        </form>
+        
+        <!-- Right Side Links -->
+        <div class="navbar-top-links">
+            <!-- AI Recommendations -->
+            {% if user.is_authenticated %}
+            <a href="{% url 'store:recommendations' %}" class="navbar-top-link d-none d-lg-flex flex-column">
+                <span class="nav-line1">AI Powered</span>
+                <span class="nav-line2"><i class="fas fa-robot"></i> For You</span>
+            </a>
+            {% endif %}
+            
+            <!-- User Account -->
+            {% if user.is_authenticated %}
+            <div class="dropdown d-inline-block">
+                <a href="#" class="navbar-top-link dropdown-toggle d-flex flex-column" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="nav-line1">Hello, {{ user.first_name|default:user.username|truncatechars:10 }}</span>
+                    <span class="nav-line2">Account <i class="fas fa-caret-down ms-1"></i></span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-2" style="min-width: 200px;">
+                    <li><a class="dropdown-item py-2" href="{% url 'store:profile' %}">
+                        <i class="fas fa-user me-2 text-primary"></i>My Profile
+                    </a></li>
+                    <li><a class="dropdown-item py-2" href="{% url 'store:order_history' %}">
+                        <i class="fas fa-box me-2 text-success"></i>My Orders
+                    </a></li>
+                    <li><a class="dropdown-item py-2" href="{% url 'store:recommendations' %}">
+                        <i class="fas fa-robot me-2 text-info"></i>AI Recommendations
+                    </a></li>
+                    {% if user.is_staff %}
+                    <li><hr class="dropdown-divider my-1"></li>
+                    <li><a class="dropdown-item py-2" href="{% url 'store:admin_dashboard' %}">
+                        <i class="fas fa-tachometer-alt me-2 text-warning"></i>Admin Panel
+                    </a></li>
+                    {% endif %}
+                    <li><hr class="dropdown-divider my-1"></li>
+                    <li>
+                        <form method="POST" action="{% url 'store:logout' %}" class="d-inline w-100">
+                            {% csrf_token %}
+                            <button type="submit" class="dropdown-item text-danger py-2 w-100 text-start">
+                                <i class="fas fa-sign-out-alt me-2"></i>Logout
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+            {% else %}
+            <a href="{% url 'store:login' %}" class="navbar-top-link d-flex flex-column">
+                <span class="nav-line1">Hello, Guest</span>
+                <span class="nav-line2">Sign In</span>
+            </a>
+            {% endif %}
+            
+            <!-- Cart -->
+            <a href="{% url 'store:cart' %}" class="navbar-top-link cart-link d-flex flex-column">
+                <span class="nav-line1 d-none d-md-block">Cart</span>
+                <span class="nav-line2">
+                    <i class="fas fa-shopping-cart fa-lg"></i>
+                    {% if cart_count > 0 %}
+                    <span class="cart-count-badge" id="cart-count-badge">{{ cart_count }}</span>
+                    {% endif %}
+                </span>
+            </a>
+        </div>
+    </div>
+</nav>
+
+<!-- Amazon-Style Category Sub-bar (Fixed) -->
+<div class="navbar-subbar">
+    <div class="container">
+        <a href="{% url 'store:product_list' %}">
+            <i class="fas fa-th me-1"></i>All Products
+        </a>
+        {% for category in all_categories %}
+        <a href="{% url 'store:category_products' slug=category.slug %}">
+            <i class="{{ category.icon }} me-1"></i>{{ category.name }}
+        </a>
+        {% endfor %}
+    </div>
+</div>

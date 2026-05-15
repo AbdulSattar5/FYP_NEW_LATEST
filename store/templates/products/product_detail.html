@@ -1,0 +1,368 @@
+{% extends 'base.html' %}
+{% load static store_tags %}
+
+{% block title %}{{ product.name }} - AI Shop{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="bg-light py-3">
+    <div class="container">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item"><a href="{% url 'store:home' %}">Home</a></li>
+                {% if product.category %}
+                <li class="breadcrumb-item"><a href="{% url 'store:category_products' slug=product.category.slug %}">{{ product.category.name }}</a></li>
+                {% else %}
+                <li class="breadcrumb-item">Uncategorized</li>
+                {% endif %}
+                <li class="breadcrumb-item active">{{ product.name }}</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<!-- Product Detail Section -->
+<div class="container my-5">
+    <div class="row g-4">
+        <!-- Left: Product Image -->
+        <div class="col-lg-6">
+            <div class="position-relative">
+                <img src="{{ product|product_image_url }}" alt="{{ product.name }}" 
+                     class="img-fluid rounded shadow-sm" style="width: 100%; max-height: 500px; object-fit: cover;">
+                
+                <!-- Discount Badge -->
+                {% if product.is_on_discount %}
+                <div class="position-absolute top-0 end-0 m-3">
+                    <span class="badge bg-danger fs-5 px-3 py-2">
+                        {{ product.discount_percentage|floatformat:0 }}% OFF
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Right: Product Info -->
+        <div class="col-lg-6">
+            <!-- Category Badge -->
+            {% if product.category %}
+            <a href="{% url 'store:category_products' slug=product.category.slug %}" 
+               class="badge bg-light text-dark text-decoration-none mb-2">
+                <i class="{{ product.category.icon }} me-1"></i>{{ product.category.name }}
+            </a>
+            {% else %}
+            <span class="badge bg-light text-dark mb-2">Uncategorized</span>
+            {% endif %}
+
+            <!-- Product Name -->
+            <h1 class="fw-bold mb-3">{{ product.name }}</h1>
+
+            <!-- Rating -->
+            <div class="d-flex align-items-center mb-3">
+                <div class="text-warning me-2">
+                    {% with product.rating|default:0 as rating %}
+                        {% for i in rating|star_range %}
+                        {% if i <= rating %}
+                        <i class="fas fa-star"></i>
+                        {% else %}
+                        <i class="far fa-star"></i>
+                        {% endif %}
+                        {% endfor %}
+                    {% endwith %}
+                </div>
+                <span class="text-muted">({{ product.rating|default:0|floatformat:1 }} / 5.0)</span>
+                <a href="#reviews" class="ms-3 text-decoration-none">{{ feedbacks.count }} reviews</a>
+            </div>
+
+            <!-- Price Section -->
+            <div class="mb-4">
+                {% if product.price %}
+                {% if product.is_on_discount %}
+                <div class="d-flex align-items-center gap-3">
+                    <h2 class="text-danger fw-bold mb-0">{{ product.discount_price|currency }}</h2>
+                    <h4 class="text-muted text-decoration-line-through mb-0">{{ product.price|currency }}</h4>
+                    <span class="badge bg-success">Save {{ product.discount_percentage|floatformat:0 }}%</span>
+                </div>
+                {% else %}
+                <h2 class="text-primary fw-bold mb-0">{{ product.price|currency }}</h2>
+                {% endif %}
+                {% else %}
+                <h2 class="text-muted fw-bold mb-0">Price unavailable</h2>
+                {% endif %}
+            </div>
+
+            <!-- Stock Indicator -->
+            <div class="mb-4">
+                {% if product.stock_level > 0 %}
+                <p class="text-success mb-0">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>In Stock</strong> ({{ product.stock_level }} remaining)
+                </p>
+                {% if product.stock_level < 5 %}
+                <p class="text-warning small mb-0">
+                    <i class="fas fa-exclamation-triangle me-1"></i>Only {{ product.stock_level }} left!
+                </p>
+                {% endif %}
+                {% else %}
+                <p class="text-danger mb-0">
+                    <i class="fas fa-times-circle me-2"></i>
+                    <strong>Out of Stock</strong>
+                </p>
+                {% endif %}
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="d-flex gap-3 mb-4">
+                {% if product.stock_level > 0 %}
+                <button onclick="addToCart({{ product.product_id }})" class="btn btn-primary btn-lg flex-grow-1">
+                    <i class="fas fa-shopping-cart me-2"></i>Add to Cart
+                </button>
+                <a href="{% url 'store:place_order' product_id=product.product_id %}" class="btn btn-success btn-lg flex-grow-1">
+                    <i class="fas fa-bolt me-2"></i>Buy Now
+                </a>
+                {% else %}
+                <button class="btn btn-secondary btn-lg flex-grow-1" disabled>
+                    <i class="fas fa-times me-2"></i>Out of Stock
+                </button>
+                {% endif %}
+            </div>
+
+            <!-- Share Product -->
+            <div class="mb-4">
+                <p class="text-muted small mb-2">Share this product:</p>
+                <div class="d-flex gap-2">
+                    <a href="#" class="btn btn-sm btn-outline-primary">
+                        <i class="fab fa-facebook"></i>
+                    </a>
+                    <a href="#" class="btn btn-sm btn-outline-info">
+                        <i class="fab fa-twitter"></i>
+                    </a>
+                    <a href="#" class="btn btn-sm btn-outline-success">
+                        <i class="fab fa-whatsapp"></i>
+                    </a>
+                    <button onclick="copyLink()" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-link"></i> Copy Link
+                    </button>
+                </div>
+            </div>
+
+            <!-- Product Attributes -->
+            {% if product.attributes %}
+            <div class="mb-4">
+                <h6 class="fw-bold mb-2">Product Details:</h6>
+                <div class="d-flex flex-wrap gap-2">
+                    {% for key, value in product.attributes.items %}
+                    <span class="badge bg-light text-dark">
+                        {{ key|title }}: {{ value }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Description -->
+            <div class="mb-4">
+                <h6 class="fw-bold mb-2">Description:</h6>
+                <p class="text-muted">{{ product.description|default:"No description available." }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rate This Product Section (Only if purchased and not rated) -->
+    {% if user.is_authenticated and has_purchased and not has_rated %}
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">
+                        <i class="fas fa-star text-warning me-2"></i>Rate This Product
+                    </h5>
+                    <form method="POST" action="{% url 'store:submit_feedback' product_id=product.product_id %}">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label">Your Rating:</label>
+                            <div class="star-rating" id="starRating">
+                                <i class="far fa-star" data-rating="1"></i>
+                                <i class="far fa-star" data-rating="2"></i>
+                                <i class="far fa-star" data-rating="3"></i>
+                                <i class="far fa-star" data-rating="4"></i>
+                                <i class="far fa-star" data-rating="5"></i>
+                            </div>
+                            <input type="hidden" name="rating" id="ratingInput" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Your Review:</label>
+                            <textarea name="comment" class="form-control" rows="4" placeholder="Share your experience with this product..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-paper-plane me-2"></i>Submit Review
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- User Reviews Section -->
+    <div class="row mt-5" id="reviews">
+        <div class="col-12">
+            <h4 class="fw-bold mb-4">
+                <i class="fas fa-comments me-2"></i>Customer Reviews ({{ feedbacks.count }})
+            </h4>
+            
+            {% if feedbacks %}
+            <div class="row g-3">
+                {% for feedback in feedbacks %}
+                <div class="col-12">
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <h6 class="fw-bold mb-1">{{ feedback.user.get_full_name|default:feedback.user.username }}</h6>
+                                    <div class="text-warning small">
+                                        {% for i in feedback.rating|star_range %}
+                                        {% if i <= feedback.rating %}
+                                        <i class="fas fa-star"></i>
+                                        {% else %}
+                                        <i class="far fa-star"></i>
+                                        {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                <small class="text-muted">{{ feedback.created_at|date:"M d, Y" }}</small>
+                            </div>
+                            <p class="mb-0">{{ feedback.comment }}</p>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <i class="fas fa-comment-slash fa-3x text-muted mb-3"></i>
+                <p class="text-muted">No reviews yet. Be the first to review this product!</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- More from Category -->
+    {% if similar_products %}
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="fw-bold mb-0">
+                    <i class="fas fa-th me-2"></i>
+                    {% if product.category %}More from {{ product.category.name }}{% else %}Related Products{% endif %}
+                </h4>
+                {% if product.category %}
+                <a href="{% url 'store:category_products' slug=product.category.slug %}" class="btn btn-sm btn-outline-primary">
+                    View All <i class="fas fa-arrow-right ms-1"></i>
+                </a>
+                {% endif %}
+            </div>
+            <div class="row g-3">
+                {% for similar in similar_products %}
+                <div class="col-lg-2 col-md-3 col-sm-4 col-6">
+                    {% include 'partials/product_card.html' with product=similar %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recommended For You -->
+    {% if user.is_authenticated and recommended_products %}
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="fw-bold mb-0">
+                    <i class="fas fa-robot text-primary me-2"></i>Recommended For You
+                </h4>
+                <a href="{% url 'store:recommendations' %}" class="btn btn-sm btn-outline-primary">
+                    See All <i class="fas fa-arrow-right ms-1"></i>
+                </a>
+            </div>
+            <div class="row g-3">
+                {% for rec_product in recommended_products %}
+                <div class="col-lg-3 col-md-4 col-sm-6">
+                    {% include 'partials/product_card.html' with product=rec_product recommended_ids=recommended_ids %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Star Rating Interactive
+const starRating = document.getElementById('starRating');
+if (starRating) {
+    document.querySelectorAll('#starRating i').forEach(star => {
+        star.addEventListener('click', function() {
+            const rating = this.getAttribute('data-rating');
+            document.getElementById('ratingInput').value = rating;
+            
+            // Update star display
+            document.querySelectorAll('#starRating i').forEach((s, index) => {
+                if (index < rating) {
+                    s.classList.remove('far');
+                    s.classList.add('fas');
+                } else {
+                    s.classList.remove('fas');
+                    s.classList.add('far');
+                }
+            });
+        });
+        
+        // Hover effect
+        star.addEventListener('mouseenter', function() {
+            const rating = this.getAttribute('data-rating');
+            document.querySelectorAll('#starRating i').forEach((s, index) => {
+                if (index < rating) {
+                    s.classList.add('fas');
+                    s.classList.remove('far');
+                }
+            });
+        });
+    });
+
+    // Reset on mouse leave
+    starRating.addEventListener('mouseleave', function() {
+        const currentRating = document.getElementById('ratingInput').value;
+        document.querySelectorAll('#starRating i').forEach((s, index) => {
+            if (index < currentRating) {
+                s.classList.add('fas');
+                s.classList.remove('far');
+            } else {
+                s.classList.add('far');
+                s.classList.remove('fas');
+            }
+        });
+    });
+}
+
+// Copy Link Function
+function copyLink() {
+    navigator.clipboard.writeText(window.location.href);
+    alert('Product link copied to clipboard!');
+}
+</script>
+
+<style>
+#starRating i {
+    font-size: 2rem;
+    cursor: pointer;
+    color: #ffc107;
+    transition: all 0.2s ease;
+}
+
+#starRating i:hover {
+    transform: scale(1.2);
+}
+</style>
+{% endblock %}

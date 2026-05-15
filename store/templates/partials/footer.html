@@ -1,0 +1,162 @@
+{% load static %}
+
+<footer class="bg-dark text-white pt-5 pb-3 mt-5">
+    <div class="container">
+        <div class="row g-4">
+            <!-- Column 1: About AI Shop -->
+            <div class="col-lg-3 col-md-6">
+                <h5 class="fw-bold mb-3">
+                    <i class="fas fa-bolt text-primary"></i> AI Shop
+                </h5>
+                <p class="text-muted small">
+                    Smart Shopping, Tailored For You
+                </p>
+                <p class="small">
+                    Experience the future of online shopping with AI-powered personalized recommendations. 
+                    We help you discover products you'll love!
+                </p>
+                <div class="social-icons mt-3">
+                    <a href="#" class="text-white me-3" title="Facebook">
+                        <i class="fab fa-facebook fa-lg"></i>
+                    </a>
+                    <a href="#" class="text-white me-3" title="Instagram">
+                        <i class="fab fa-instagram fa-lg"></i>
+                    </a>
+                    <a href="#" class="text-white me-3" title="Twitter">
+                        <i class="fab fa-twitter fa-lg"></i>
+                    </a>
+                    <a href="#" class="text-white" title="LinkedIn">
+                        <i class="fab fa-linkedin fa-lg"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Column 2: Quick Links -->
+            <div class="col-lg-3 col-md-6">
+                <h5 class="fw-bold mb-3">Quick Links</h5>
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <a href="{% url 'store:home' %}" class="text-white-50 text-decoration-none">
+                            <i class="fas fa-home me-2"></i>Home
+                        </a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="{% url 'store:product_list' %}" class="text-white-50 text-decoration-none">
+                            <i class="fas fa-shopping-bag me-2"></i>Shop
+                        </a>
+                    </li>
+                    {% if user.is_authenticated %}
+                    <li class="mb-2">
+                        <a href="{% url 'store:recommendations' %}" class="text-white-50 text-decoration-none">
+                            <i class="fas fa-robot me-2"></i>AI Recommendations
+                        </a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="{% url 'store:order_history' %}" class="text-white-50 text-decoration-none">
+                            <i class="fas fa-box me-2"></i>Track Order
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li class="mb-2">
+                        <a href="#" class="text-white-50 text-decoration-none">
+                            <i class="fas fa-info-circle me-2"></i>About Us
+                        </a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="#" class="text-white-50 text-decoration-none">
+                            <i class="fas fa-envelope me-2"></i>Contact
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- Column 3: Categories -->
+            <div class="col-lg-3 col-md-6">
+                <h5 class="fw-bold mb-3">Categories</h5>
+                <ul class="list-unstyled">
+                    {% for category in all_categories|slice:":6" %}
+                    <li class="mb-2">
+                        <a href="{% url 'store:category_products' slug=category.slug %}" 
+                           class="text-white-50 text-decoration-none">
+                            <i class="{{ category.icon }} me-2"></i>{{ category.name }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            
+            <!-- Column 4: Contact & Newsletter -->
+            <div class="col-lg-3 col-md-6">
+                <h5 class="fw-bold mb-3">Stay Connected</h5>
+                <p class="small text-white-50">
+                    <i class="fas fa-map-marker-alt me-2"></i>
+                    IUB, Bahawalpur, Pakistan
+                </p>
+                <p class="small text-white-50">
+                    <i class="fas fa-envelope me-2"></i>
+                    support@aishop.com
+                </p>
+                
+                <!-- Newsletter -->
+                <div class="mt-3">
+                    <p class="small mb-2">Subscribe to our newsletter:</p>
+                    <form class="input-group input-group-sm">
+                        <input type="email" class="form-control" placeholder="Your email" required>
+                        <button class="btn btn-primary" type="submit">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Payment Methods -->
+                <div class="mt-3">
+                    <p class="small mb-2">We Accept:</p>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <span class="badge bg-light text-dark">
+                            <i class="fab fa-cc-visa"></i> Visa
+                        </span>
+                        <span class="badge bg-light text-dark">
+                            <i class="fab fa-cc-mastercard"></i> Mastercard
+                        </span>
+                        <span class="badge bg-light text-dark">
+                            💳 JazzCash
+                        </span>
+                        <span class="badge bg-light text-dark">
+                            💳 EasyPaisa
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Bottom Bar -->
+        <hr class="my-4 bg-secondary">
+        <div class="row align-items-center">
+            <div class="col-md-6 text-center text-md-start">
+                <p class="small mb-0 text-white-50">
+                    © 2024 AI Shop. All rights reserved.
+                </p>
+            </div>
+            <div class="col-md-6 text-center text-md-end">
+                <a href="#" class="text-white-50 text-decoration-none small me-3">Privacy Policy</a>
+                <a href="#" class="text-white-50 text-decoration-none small me-3">Terms of Service</a>
+                <span class="small text-white-50">
+                    Built with ❤️ + 🤖 AI by Ayesha Khan
+                </span>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<style>
+/* Footer hover effects */
+footer a:hover {
+    color: #6C63FF !important;
+    transition: color 0.3s ease;
+}
+
+.social-icons a:hover {
+    transform: translateY(-3px);
+    transition: transform 0.3s ease;
+}
+</style>

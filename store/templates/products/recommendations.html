@@ -1,0 +1,361 @@
+{% extends 'base.html' %}
+{% load static store_tags %}
+
+{% block title %}AI Recommendations - AI Shop{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="recommendations-hero py-5" style="background: linear-gradient(135deg, #6C63FF, #3F8EFC);">
+    <div class="container text-center text-white">
+        <div style="font-size: 4rem;">🤖</div>
+        <h1 class="fw-bold mt-3">Your AI Recommendations</h1>
+        <p class="lead mb-4">Powered by Collaborative + Content-Based Machine Learning</p>
+        
+        <!-- Stats Row -->
+        <div class="row g-3 mt-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="card bg-white bg-opacity-10 border-0 text-white">
+                    <div class="card-body">
+                        <h3 class="fw-bold mb-1">{{ interaction_count }}</h3>
+                        <p class="small mb-0">Total Interactions</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card bg-white bg-opacity-10 border-0 text-white">
+                    <div class="card-body">
+                        <h3 class="fw-bold mb-1">{{ products_viewed }}</h3>
+                        <p class="small mb-0">Products Viewed</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card bg-white bg-opacity-10 border-0 text-white">
+                    <div class="card-body">
+                        <h3 class="fw-bold mb-1">{{ products_purchased }}</h3>
+                        <p class="small mb-0">Purchases Made</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card bg-white bg-opacity-10 border-0 text-white">
+                    <div class="card-body">
+                        <h3 class="fw-bold mb-1">{{ total_recs }}</h3>
+                        <p class="small mb-0">AI Suggestions</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Refresh Button -->
+        <button onclick="refreshRecommendations()" class="btn btn-light btn-lg rounded-pill px-4 mt-4" id="refreshBtn">
+            <i class="fas fa-sync-alt me-2"></i>Refresh Recommendations
+        </button>
+    </div>
+</div>
+
+<!-- How It Works Section -->
+<div class="container my-5">
+    <div class="text-center mb-5">
+        <h2 class="fw-bold mb-3">How Our AI Works</h2>
+        <p class="text-muted">Understanding your preferences through machine learning</p>
+    </div>
+    
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card h-100 border-0 shadow-sm text-center">
+                <div class="card-body p-4">
+                    <div style="font-size: 3rem; color: #6C63FF;">👁️</div>
+                    <h5 class="fw-bold mt-3 mb-2">1. You Browse</h5>
+                    <p class="text-muted mb-0">
+                        We track your interactions - views, purchases, ratings, and cart additions to understand your preferences.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100 border-0 shadow-sm text-center">
+                <div class="card-body p-4">
+                    <div style="font-size: 3rem; color: #3F8EFC;">🧠</div>
+                    <h5 class="fw-bold mt-3 mb-2">2. AI Learns</h5>
+                    <p class="text-muted mb-0">
+                        Our ML algorithms analyze patterns using collaborative filtering and content-based techniques.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100 border-0 shadow-sm text-center">
+                <div class="card-body p-4">
+                    <div style="font-size: 3rem; color: #43AA8B;">🎯</div>
+                    <h5 class="fw-bold mt-3 mb-2">3. Personalized Results</h5>
+                    <p class="text-muted mb-0">
+                        You see products perfectly matched to your taste, with AI confidence scores for each suggestion.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recommendations Grid -->
+<div class="container my-5">
+    {% if recommendations %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold mb-0">
+            <i class="fas fa-sparkles text-primary me-2"></i>Your Personalized Picks
+        </h3>
+        <span class="badge bg-primary px-3 py-2">{{ recommendations|length }} recommendations</span>
+    </div>
+
+    <div class="row g-4" id="recommendationsGrid">
+        {% for rec in recommendations %}
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="card h-100 shadow-sm hover-lift">
+                <!-- AI Match Score -->
+                <div class="card-header bg-gradient text-white" style="background: linear-gradient(135deg, #6C63FF, #3F8EFC);">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="fw-bold">🤖 AI Match</small>
+                        <small class="fw-bold">{{ rec.score|floatformat:0 }}%</small>
+                    </div>
+                    <div class="progress mt-2" style="height: 6px;">
+                        <div class="progress-bar bg-success" style="width: {{ rec.score }}%;"></div>
+                    </div>
+                </div>
+
+                <!-- Product Image -->
+                <div class="position-relative">
+                    <img src="{{ rec.product|product_image_url }}" alt="{{ rec.product.name }}" 
+                         class="card-img-top" style="height: 200px; object-fit: cover;">
+                    
+                    <!-- Discount Badge -->
+                    {% if rec.product.is_on_discount %}
+                    <div class="position-absolute top-0 end-0 m-2">
+                        <span class="badge bg-danger">{{ rec.product.discount_percentage|floatformat:0 }}% OFF</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="card-body">
+                    <!-- Reason Badge -->
+                    <div class="mb-2">
+                        {% if rec.reason == 'collaborative' %}
+                        <span class="badge bg-info text-white small">
+                            <i class="fas fa-users me-1"></i>Based on similar shoppers
+                        </span>
+                        {% elif rec.reason == 'content' %}
+                        <span class="badge bg-success text-white small">
+                            <i class="fas fa-history me-1"></i>Based on your history
+                        </span>
+                        {% else %}
+                        <span class="badge bg-primary text-white small">
+                            <i class="fas fa-robot me-1"></i>Hybrid AI
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Category -->
+                    {% if rec.product.category %}
+                    <a href="{% url 'store:category_products' slug=rec.product.category.slug %}" 
+                       class="badge bg-light text-dark text-decoration-none mb-2">
+                        <i class="{{ rec.product.category.icon }} me-1"></i>{{ rec.product.category.name }}
+                    </a>
+                    {% else %}
+                    <span class="badge bg-light text-dark mb-2">Uncategorized</span>
+                    {% endif %}
+
+                    <!-- Product Name -->
+                    <h6 class="fw-bold mb-2" style="height: 2.4em; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
+                        {{ rec.product.name }}
+                    </h6>
+
+                    <!-- Rating -->
+                    <div class="text-warning small mb-2">
+                        {% with rec.product.rating|default:0 as rating %}
+                            {% for i in rating|star_range %}
+                            {% if i <= rating %}
+                            <i class="fas fa-star"></i>
+                            {% else %}
+                            <i class="far fa-star"></i>
+                            {% endif %}
+                            {% endfor %}
+                            <span class="text-muted ms-1">({{ rating|floatformat:1 }})</span>
+                        {% endwith %}
+                    </div>
+
+                    <!-- Price -->
+                    <div class="mb-3">
+                        {% if rec.product.is_on_discount and rec.product.original_price %}
+                        <div class="d-flex align-items-center gap-2">
+                            <h5 class="text-danger fw-bold mb-0">{{ rec.product.discount_price|currency }}</h5>
+                            <small class="text-muted text-decoration-line-through">{{ rec.product.price|currency }}</small>
+                        </div>
+                        {% else %}
+                        <h5 class="text-primary fw-bold mb-0">{{ rec.product.price|currency }}</h5>
+                        {% endif %}
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex gap-2">
+                        {% if rec.product.stock_level > 0 %}
+                        <button onclick="addToCart({{ rec.product.product_id }})" class="btn btn-sm btn-primary flex-grow-1">
+                            <i class="fas fa-cart-plus"></i>
+                        </button>
+                        {% else %}
+                        <button class="btn btn-sm btn-secondary flex-grow-1" disabled>
+                            <i class="fas fa-times-circle"></i>
+                        </button>
+                        {% endif %}
+                        <a href="{% url 'store:product_detail' pk=rec.product.product_id %}" class="btn btn-sm btn-outline-primary flex-grow-1">
+                            View
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% else %}
+    <!-- Empty State -->
+    <div class="text-center py-5">
+        <div style="font-size: 5rem; opacity: 0.3;">🤖</div>
+        <h3 class="fw-bold mt-3">Our AI Needs More Data!</h3>
+        <p class="text-muted mb-4">
+            Start browsing products to help our AI understand your preferences.<br>
+            The more you interact, the better your recommendations become!
+        </p>
+        <a href="{% url 'store:product_list' %}" class="btn btn-primary btn-lg rounded-pill px-5">
+            <i class="fas fa-shopping-bag me-2"></i>Start Browsing
+        </a>
+        
+        <!-- Tips -->
+        <div class="row g-3 mt-5 justify-content-center">
+            <div class="col-lg-3 col-md-6">
+                <div class="card border-0 bg-light">
+                    <div class="card-body text-center">
+                        <i class="fas fa-eye fa-2x text-primary mb-2"></i>
+                        <p class="small mb-0">View products you like</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card border-0 bg-light">
+                    <div class="card-body text-center">
+                        <i class="fas fa-shopping-cart fa-2x text-success mb-2"></i>
+                        <p class="small mb-0">Add items to cart</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card border-0 bg-light">
+                    <div class="card-body text-center">
+                        <i class="fas fa-star fa-2x text-warning mb-2"></i>
+                        <p class="small mb-0">Rate your purchases</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Why Trust Our AI Section -->
+<div class="bg-light py-5 mt-5">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <h3 class="fw-bold mb-3">Why Trust Our AI?</h3>
+                <ul class="list-unstyled">
+                    <li class="mb-3">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        <strong>Advanced ML Algorithms:</strong> Using collaborative filtering and content-based techniques
+                    </li>
+                    <li class="mb-3">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        <strong>Privacy First:</strong> Your data is secure and never shared
+                    </li>
+                    <li class="mb-3">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        <strong>Constantly Learning:</strong> Recommendations improve with every interaction
+                    </li>
+                    <li class="mb-3">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        <strong>Transparent Scoring:</strong> See exactly how well each product matches your taste
+                    </li>
+                </ul>
+            </div>
+            <div class="col-lg-6 text-center">
+                <div style="font-size: 10rem; opacity: 0.1;">🤖</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function refreshRecommendations() {
+    const btn = document.getElementById('refreshBtn');
+    const originalHTML = btn.innerHTML;
+    
+    // Show loading state
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Refreshing...';
+    
+    // Make AJAX request
+    fetch('{% url "store:refresh_recommendations" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Reload page to show new recommendations
+            window.location.reload();
+        } else {
+            alert('Failed to refresh recommendations. Please try again.');
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+    });
+}
+</script>
+
+<style>
+.hover-lift {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
+}
+
+.recommendations-hero {
+    position: relative;
+    overflow: hidden;
+}
+
+.recommendations-hero::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320"><path fill="%23ffffff" fill-opacity="0.1" d="M0,96L48,112C96,128,192,160,288,160C384,160,480,128,576,122.7C672,117,768,139,864,138.7C960,139,1056,117,1152,101.3C1248,85,1344,75,1392,69.3L1440,64L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>') no-repeat bottom;
+    background-size: cover;
+    opacity: 0.3;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,323 @@
+{% extends 'base.html' %}
+{% load static store_tags %}
+
+{% block title %}My Profile - AI Shop{% endblock %}
+
+{% block content %}
+
+<section class="py-5 bg-light">
+    <div class="container">
+        <div class="row g-4">
+            
+            <!-- Left Sidebar -->
+            <div class="col-lg-3">
+                <div class="card shadow-sm border-0 rounded-3 sticky-top">
+                    <div class="card-body text-center p-4">
+                        <!-- Profile Picture -->
+                        <div class="position-relative d-inline-block mb-3">
+                            {% if profile.profile_picture %}
+                                <img src="{{ profile.profile_picture.url }}" alt="{{ user.username }}" class="rounded-circle" style="width: 120px; height: 120px; object-fit: cover; border: 4px solid #667eea;">
+                            {% else %}
+                                <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center" style="width: 120px; height: 120px; border: 4px solid #667eea;">
+                                    <i class="fas fa-user fa-3x text-white"></i>
+                                </div>
+                            {% endif %}
+                            <div class="position-absolute bottom-0 end-0 bg-success rounded-circle" style="width: 20px; height: 20px; border: 3px solid white;"></div>
+                        </div>
+                        
+                        <!-- User Info -->
+                        <h5 class="fw-bold mb-1">{{ user.get_full_name|default:user.username }}</h5>
+                        <p class="text-muted small mb-2">@{{ user.username }}</p>
+                        
+                        <!-- Subscription Badge -->
+                        {% if profile.subscription_type == 'premium' %}
+                            <span class="badge bg-warning text-dark mb-3">
+                                <i class="fas fa-crown me-1"></i>Premium Member
+                            </span>
+                        {% else %}
+                            <span class="badge bg-secondary mb-3">
+                                <i class="fas fa-user me-1"></i>Free Member
+                            </span>
+                        {% endif %}
+                        
+                        <p class="text-muted small mb-3">
+                            <i class="fas fa-calendar-alt me-1"></i>
+                            Member since {{ profile.created_at|date:"M Y" }}
+                        </p>
+                        
+                        <!-- Quick Stats -->
+                        <div class="row g-2 mb-3">
+                            <div class="col-4">
+                                <div class="bg-light rounded p-2">
+                                    <div class="fw-bold text-primary">{{ total_orders }}</div>
+                                    <small class="text-muted">Orders</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="bg-light rounded p-2">
+                                    <div class="fw-bold text-success">{{ feedbacks_count }}</div>
+                                    <small class="text-muted">Reviews</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="bg-light rounded p-2">
+                                    <div class="fw-bold text-warning">Rs. {{ total_spent|floatformat:0 }}</div>
+                                    <small class="text-muted">Spent</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Navigation -->
+                        <div class="list-group list-group-flush">
+                            <a href="#profile-info" class="list-group-item list-group-item-action active">
+                                <i class="fas fa-user me-2"></i>Profile Info
+                            </a>
+                            <a href="{% url 'store:order_history' %}" class="list-group-item list-group-item-action">
+                                <i class="fas fa-box me-2"></i>Order History
+                            </a>
+                            <a href="{% url 'store:recommendations' %}" class="list-group-item list-group-item-action">
+                                <i class="fas fa-robot me-2"></i>My Recommendations
+                            </a>
+                            <a href="#security" class="list-group-item list-group-item-action">
+                                <i class="fas fa-lock me-2"></i>Security
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Main Area -->
+            <div class="col-lg-9">
+                
+                <!-- Profile Information Section -->
+                <div class="card shadow-sm border-0 rounded-3 mb-4" id="profile-info">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h5 class="mb-0 fw-bold">
+                            <i class="fas fa-user-edit me-2 text-primary"></i>Profile Information
+                        </h5>
+                    </div>
+                    <div class="card-body p-4">
+                        <form method="POST" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            
+                            <div class="row g-3">
+                                <!-- First Name -->
+                                <div class="col-md-6">
+                                    <label for="{{ form.first_name.id_for_label }}" class="form-label">First Name</label>
+                                    {{ form.first_name }}
+                                    {% if form.first_name.errors %}
+                                        <div class="text-danger small mt-1">{{ form.first_name.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Last Name -->
+                                <div class="col-md-6">
+                                    <label for="{{ form.last_name.id_for_label }}" class="form-label">Last Name</label>
+                                    {{ form.last_name }}
+                                    {% if form.last_name.errors %}
+                                        <div class="text-danger small mt-1">{{ form.last_name.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Email -->
+                                <div class="col-md-6">
+                                    <label for="{{ form.email.id_for_label }}" class="form-label">Email</label>
+                                    {{ form.email }}
+                                    {% if form.email.errors %}
+                                        <div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Phone -->
+                                <div class="col-md-6">
+                                    <label for="{{ form.phone_number.id_for_label }}" class="form-label">Phone Number</label>
+                                    {{ form.phone_number }}
+                                    {% if form.phone_number.errors %}
+                                        <div class="text-danger small mt-1">{{ form.phone_number.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Address -->
+                                <div class="col-12">
+                                    <label for="{{ form.address.id_for_label }}" class="form-label">Address</label>
+                                    {{ form.address }}
+                                    {% if form.address.errors %}
+                                        <div class="text-danger small mt-1">{{ form.address.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Bio -->
+                                <div class="col-12">
+                                    <label for="{{ form.bio.id_for_label }}" class="form-label">Bio</label>
+                                    {{ form.bio }}
+                                    <small class="text-muted">Maximum 500 characters</small>
+                                    {% if form.bio.errors %}
+                                        <div class="text-danger small mt-1">{{ form.bio.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Profile Picture -->
+                                <div class="col-12">
+                                    <label for="{{ form.profile_picture.id_for_label }}" class="form-label">Profile Picture</label>
+                                    <input type="file" class="form-control" id="image-input" name="profile_picture" accept="image/*">
+                                    <img id="image-preview" src="" alt="Preview" class="mt-2 rounded" style="max-width: 150px; display: none;">
+                                    {% if form.profile_picture.errors %}
+                                        <div class="text-danger small mt-1">{{ form.profile_picture.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4">
+                                <button type="submit" class="btn btn-primary px-4">
+                                    <i class="fas fa-save me-2"></i>Update Profile
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Recent Orders Section -->
+                <div class="card shadow-sm border-0 rounded-3 mb-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0 fw-bold">
+                                <i class="fas fa-box me-2 text-primary"></i>Recent Orders
+                            </h5>
+                            <a href="{% url 'store:order_history' %}" class="btn btn-sm btn-outline-primary rounded-pill">
+                                View All <i class="fas fa-arrow-right ms-1"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if recent_orders %}
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Order ID</th>
+                                            <th>Product</th>
+                                            <th>Amount</th>
+                                            <th>Status</th>
+                                            <th>Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for order in recent_orders %}
+                                        <tr>
+                                            <td class="fw-bold">#{{ order.order_id }}</td>
+                                            <td>{{ order.product.name|truncatewords:5 }}</td>
+                                            <td>{{ order.total_price|currency }}</td>
+                                            <td>
+                                                {% if order.status == 'pending' %}
+                                                    <span class="badge bg-warning text-dark">Pending</span>
+                                                {% elif order.status == 'confirmed' %}
+                                                    <span class="badge bg-info">Confirmed</span>
+                                                {% elif order.status == 'processing' %}
+                                                    <span class="badge bg-primary">Processing</span>
+                                                {% elif order.status == 'shipped' %}
+                                                    <span class="badge bg-purple">Shipped</span>
+                                                {% elif order.status == 'delivered' %}
+                                                    <span class="badge bg-success">Delivered</span>
+                                                {% elif order.status == 'cancelled' %}
+                                                    <span class="badge bg-danger">Cancelled</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ order.ordered_at|date:"M d, Y" }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="text-center py-5">
+                                <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">No orders yet</p>
+                                <a href="{% url 'store:product_list' %}" class="btn btn-primary rounded-pill">
+                                    <i class="fas fa-shopping-bag me-2"></i>Start Shopping
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- My Preferences Section -->
+                <div class="card shadow-sm border-0 rounded-3">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h5 class="mb-0 fw-bold">
+                            <i class="fas fa-heart me-2 text-primary"></i>My Preferences
+                        </h5>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="p-3 bg-light rounded">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="fas fa-chart-line fa-2x text-primary me-3"></i>
+                                        <div>
+                                            <div class="fw-bold">Shopping Activity</div>
+                                            <small class="text-muted">{{ total_orders }} orders placed</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="p-3 bg-light rounded">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="fas fa-star fa-2x text-warning me-3"></i>
+                                        <div>
+                                            <div class="fw-bold">Reviews Given</div>
+                                            <small class="text-muted">{{ feedbacks_count }} product reviews</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Subscription Upgrade CTA -->
+                        {% if profile.subscription_type == 'free' %}
+                        <div class="mt-4 p-4 rounded" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <div class="text-white">
+                                <h5 class="fw-bold mb-2">
+                                    <i class="fas fa-crown me-2"></i>Upgrade to Premium
+                                </h5>
+                                <p class="mb-3">Get exclusive benefits and priority support!</p>
+                                <ul class="mb-3">
+                                    <li>Early access to sales</li>
+                                    <li>Free shipping on all orders</li>
+                                    <li>Priority customer support</li>
+                                    <li>Exclusive product recommendations</li>
+                                </ul>
+                                <button class="btn btn-light rounded-pill px-4" disabled>
+                                    <i class="fas fa-arrow-up me-2"></i>Upgrade Now
+                                </button>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Image Preview
+document.getElementById('image-input')?.addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('image-preview');
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+});
+</script>
+{% endblock %}

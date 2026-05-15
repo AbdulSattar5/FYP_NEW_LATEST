@@ -1,0 +1,452 @@
+{% extends 'base.html' %}
+{% load static store_tags %}
+
+{% block title %}AI Shop — Smart Shopping, Tailored For You{% endblock %}
+
+{% block content %}
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 1: HERO BANNER -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section class="hero-section" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 500px; position: relative; overflow: hidden;">
+    <div class="container py-5">
+        <div class="row align-items-center">
+            <!-- Left Side: Text Content -->
+            <div class="col-lg-7 col-md-6 text-white py-5">
+                <h1 class="display-3 fw-bold mb-3">
+                    Smart Shopping,<br>
+                    <span class="text-gradient-light">Tailored For You 🤖</span>
+                </h1>
+                <p class="lead mb-4" style="font-size: 1.2rem; opacity: 0.95;">
+                    AI-powered recommendations based on YOUR preferences
+                </p>
+                
+                <!-- CTA Buttons -->
+                <div class="d-flex gap-3 mb-4 flex-wrap">
+                    <a href="{% url 'store:product_list' %}" class="btn btn-light btn-lg rounded-pill px-4 shadow">
+                        <i class="fas fa-shopping-bag me-2"></i>Shop Now
+                    </a>
+                    {% if user.is_authenticated %}
+                    <a href="{% url 'store:recommendations' %}" class="btn btn-outline-light btn-lg rounded-pill px-4">
+                        <i class="fas fa-robot me-2"></i>See My Recommendations
+                    </a>
+                    {% endif %}
+                </div>
+                
+                <!-- Stats Row -->
+                <div class="d-flex gap-4 flex-wrap">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-box-open fa-2x me-2" style="opacity: 0.8;"></i>
+                        <div>
+                            <div class="fw-bold fs-5">1000+</div>
+                            <small style="opacity: 0.8;">Products</small>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-robot fa-2x me-2" style="opacity: 0.8;"></i>
+                        <div>
+                            <div class="fw-bold fs-5">AI-Powered</div>
+                            <small style="opacity: 0.8;">Smart Picks</small>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-users fa-2x me-2" style="opacity: 0.8;"></i>
+                        <div>
+                            <div class="fw-bold fs-5">500+</div>
+                            <small style="opacity: 0.8;">Happy Customers</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Side: Floating Cards Animation -->
+            <div class="col-lg-5 col-md-6 d-none d-md-block position-relative" style="height: 400px;">
+                <div class="floating-card" style="position: absolute; top: 20px; right: 50px; background: white; padding: 15px 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); animation: float 3s ease-in-out infinite;">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fas fa-robot fa-2x text-primary"></i>
+                        <div>
+                            <div class="fw-bold text-dark">AI Match</div>
+                            <div class="text-success fw-bold fs-5">95%</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="floating-card" style="position: absolute; top: 150px; right: 20px; background: white; padding: 15px 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); animation: float 3s ease-in-out infinite 1s;">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fas fa-star fa-2x text-warning"></i>
+                        <div>
+                            <div class="fw-bold text-dark">Top Rated</div>
+                            <div class="text-warning fw-bold fs-5">⭐⭐⭐⭐⭐</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="floating-card" style="position: absolute; top: 280px; right: 80px; background: white; padding: 15px 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); animation: float 3s ease-in-out infinite 2s;">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fas fa-fire fa-2x text-danger"></i>
+                        <div>
+                            <div class="fw-bold text-dark">Trending</div>
+                            <div class="text-danger fw-bold fs-5">🔥 Hot</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 2: CATEGORY PILLS -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section class="py-4 bg-light">
+    <div class="container">
+        <h3 class="fw-bold mb-3">
+            <i class="fas fa-th-large me-2"></i>Browse by Category
+        </h3>
+        <div class="category-scroll-container">
+            <div class="category-scroll d-flex gap-3 overflow-auto pb-2">
+                {% for category in categories %}
+                <a href="{% url 'store:category_products' slug=category.slug %}" 
+                   class="category-pill text-decoration-none"
+                   style="background: linear-gradient(135deg, {{ category.color }}dd, {{ category.color }}); min-width: 180px;">
+                    <div class="text-center p-3 text-white">
+                        <i class="{{ category.icon }} fa-2x mb-2"></i>
+                        <div class="fw-bold">{{ category.name }}</div>
+                        <small style="opacity: 0.9;">{{ category.product_count }} items</small>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 3: LIMITED TIME DISCOUNT BANNER -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+{% if discounted_products %}
+<section class="py-4" style="background: linear-gradient(135deg, #ff6b6b, #ee5a6f);">
+    <div class="container">
+        <div class="row align-items-center text-white mb-3">
+            <div class="col-md-8">
+                <h3 class="fw-bold mb-1">
+                    <i class="fas fa-fire me-2"></i>Limited Time Offer — Up to 
+                    {% if discounted_products.first %}{{ discounted_products.first.discount_percentage|floatformat:0 }}%{% else %}20%{% endif %} OFF!
+                </h3>
+                <p class="mb-0">Hurry! Sale ends soon</p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <div class="countdown-timer d-inline-block bg-white text-dark px-4 py-2 rounded-pill fw-bold" id="countdown">
+                    <i class="fas fa-clock me-2 text-danger"></i>
+                    <span id="timer">23:59:59</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="discount-scroll d-flex gap-3 overflow-auto pb-2">
+            {% for product in discounted_products %}
+            <div style="min-width: 250px;">
+                {% include 'partials/product_card.html' with product=product %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 4: AI RECOMMENDATIONS -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+{% if user.is_authenticated and recommended_products %}
+<section class="py-5" style="background: linear-gradient(135deg, #f8f7ff, #f0eeff);">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+            <div>
+                <h2 class="fw-bold mb-1">
+                    <i class="fas fa-robot me-2"></i>
+                    <span class="text-gradient">Recommended For You</span>
+                </h2>
+                <p class="text-muted mb-0">Powered by AI — Based on your browsing & purchase history</p>
+            </div>
+            <a href="{% url 'store:recommendations' %}" class="btn btn-outline-primary btn-sm rounded-pill">
+                See All <i class="fas fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+        
+        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
+            {% for product in recommended_products %}
+                {% include 'partials/product_card.html' with product=product recommended_ids=recommended_ids %}
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% elif not user.is_authenticated %}
+<!-- For Guests: Login Prompt -->
+<section class="py-5 text-center" style="background: linear-gradient(135deg, #f8f7ff, #f0eeff);">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                <div style="font-size: 5rem;">🤖</div>
+                <h3 class="fw-bold mt-3">Get Personalized Recommendations</h3>
+                <p class="text-muted mb-4">Our AI learns your preferences and shows you products you'll love!</p>
+                
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <div class="p-3 bg-white rounded shadow-sm">
+                            <i class="fas fa-brain fa-2x text-primary mb-2"></i>
+                            <div class="fw-bold">Smart AI</div>
+                            <small class="text-muted">Learns your taste</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 bg-white rounded shadow-sm">
+                            <i class="fas fa-heart fa-2x text-danger mb-2"></i>
+                            <div class="fw-bold">Perfect Match</div>
+                            <small class="text-muted">Products you'll love</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex gap-3 justify-content-center flex-wrap">
+                    <a href="{% url 'store:signup' %}" class="btn btn-primary rounded-pill px-4">
+                        <i class="fas fa-user-plus me-2"></i>Create Account
+                    </a>
+                    <a href="{% url 'store:login' %}" class="btn btn-outline-primary rounded-pill px-4">
+                        <i class="fas fa-sign-in-alt me-2"></i>Login
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 5: TRENDING PRODUCTS -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section class="py-5">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="fw-bold">
+                <i class="fas fa-fire text-danger me-2"></i>Trending Products
+            </h2>
+            <a href="{% url 'store:product_list' %}?sort_by=rating" class="btn btn-outline-primary btn-sm rounded-pill">
+                View All <i class="fas fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+        
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
+            {% for product in trending_products %}
+                {% include 'partials/product_card.html' with product=product recommended_ids=recommended_ids %}
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 6: FEATURED PRODUCTS -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+{% if featured_products %}
+<section class="py-5 bg-light">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="fw-bold">
+                <i class="fas fa-star text-warning me-2"></i>Featured Products
+            </h2>
+            <a href="{% url 'store:product_list' %}" class="btn btn-outline-primary btn-sm rounded-pill">
+                View All <i class="fas fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+        
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
+            {% for product in featured_products %}
+                {% include 'partials/product_card.html' with product=product recommended_ids=recommended_ids %}
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 7: WHY CHOOSE AI SHOP -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section class="py-5">
+    <div class="container">
+        <h2 class="fw-bold text-center mb-5">Why Choose AI Shop?</h2>
+        
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="feature-card text-center p-4 h-100 bg-white rounded shadow-sm">
+                    <div class="feature-icon mb-3" style="font-size: 3rem;">🤖</div>
+                    <h4 class="fw-bold mb-3">AI Recommendations</h4>
+                    <p class="text-muted">
+                        Our smart AI learns your preferences and suggests products tailored just for you. 
+                        No more endless scrolling!
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card text-center p-4 h-100 bg-white rounded shadow-sm">
+                    <div class="feature-icon mb-3" style="font-size: 3rem;">🛡️</div>
+                    <h4 class="fw-bold mb-3">Secure Shopping</h4>
+                    <p class="text-muted">
+                        Your data is safe with us. Encrypted transactions and secure payment gateways 
+                        protect your information.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card text-center p-4 h-100 bg-white rounded shadow-sm">
+                    <div class="feature-icon mb-3" style="font-size: 3rem;">⚡</div>
+                    <h4 class="fw-bold mb-3">Fast Delivery</h4>
+                    <p class="text-muted">
+                        Quick and reliable delivery across Pakistan. Track your order in real-time 
+                        from warehouse to doorstep.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Hero Section Animations */
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+}
+
+.text-gradient-light {
+    background: linear-gradient(135deg, #fff, #f0f0f0);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Category Pills */
+.category-scroll-container {
+    position: relative;
+}
+
+.category-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #6C63FF #f0f0f0;
+}
+
+.category-scroll::-webkit-scrollbar {
+    height: 8px;
+}
+
+.category-scroll::-webkit-scrollbar-track {
+    background: #f0f0f0;
+    border-radius: 10px;
+}
+
+.category-scroll::-webkit-scrollbar-thumb {
+    background: #6C63FF;
+    border-radius: 10px;
+}
+
+.category-pill {
+    border-radius: 15px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.category-pill:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+}
+
+/* Discount Scroll */
+.discount-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.5) transparent;
+}
+
+.discount-scroll::-webkit-scrollbar {
+    height: 8px;
+}
+
+.discount-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.5);
+    border-radius: 10px;
+}
+
+/* Feature Cards */
+.feature-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.feature-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.15) !important;
+}
+
+/* Text Gradient */
+.text-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Countdown Timer Animation */
+#countdown {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Countdown Timer
+function startCountdown() {
+    const timerElement = document.getElementById('timer');
+    if (!timerElement) return;
+    
+    // Set countdown to 24 hours from now
+    let hours = 23;
+    let minutes = 59;
+    let seconds = 59;
+    
+    setInterval(() => {
+        seconds--;
+        
+        if (seconds < 0) {
+            seconds = 59;
+            minutes--;
+        }
+        
+        if (minutes < 0) {
+            minutes = 59;
+            hours--;
+        }
+        
+        if (hours < 0) {
+            hours = 23;
+            minutes = 59;
+            seconds = 59;
+        }
+        
+        timerElement.textContent = 
+            String(hours).padStart(2, '0') + ':' + 
+            String(minutes).padStart(2, '0') + ':' + 
+            String(seconds).padStart(2, '0');
+    }, 1000);
+}
+
+// Start countdown on page load
+document.addEventListener('DOMContentLoaded', startCountdown);
+</script>
+{% endblock %}

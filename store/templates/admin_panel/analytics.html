@@ -1,0 +1,341 @@
+{% extends 'base.html' %}
+{% load static store_tags %}
+
+{% block title %}Analytics - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid my-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">
+                <i class="fas fa-chart-line me-2"></i>Analytics Dashboard
+            </h2>
+            <p class="text-muted mb-0">Comprehensive business insights and metrics</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success" onclick="exportData()">
+                <i class="fas fa-file-export me-2"></i>Export CSV
+            </button>
+            <a href="{% url 'store:admin_dashboard' %}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-2"></i>Back
+            </a>
+        </div>
+    </div>
+
+    <!-- Date Range Picker -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3 align-items-end">
+                <div class="col-lg-3">
+                    <label class="form-label fw-bold">Date Range</label>
+                    <select name="range" class="form-select" id="dateRange">
+                        <option value="7" {% if request.GET.range == '7' %}selected{% endif %}>Last 7 Days</option>
+                        <option value="30" {% if request.GET.range == '30' or not request.GET.range %}selected{% endif %}>Last 30 Days</option>
+                        <option value="90" {% if request.GET.range == '90' %}selected{% endif %}>Last 90 Days</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                </div>
+                <div class="col-lg-3" id="customStartDate" style="display:none;">
+                    <label class="form-label fw-bold">Start Date</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ request.GET.start_date }}">
+                </div>
+                <div class="col-lg-3" id="customEndDate" style="display:none;">
+                    <label class="form-label fw-bold">End Date</label>
+                    <input type="date" name="end_date" class="form-control" value="{{ request.GET.end_date }}">
+                </div>
+                <div class="col-lg-3">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-sync-alt me-2"></i>Update
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Revenue Trend Chart -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-area me-2 text-success"></i>Revenue Trend
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="revenueTrendChart" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Products & User Engagement -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-trophy me-2 text-warning"></i>Top 10 Products by Revenue
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="topProductsChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-users me-2 text-info"></i>User Engagement
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="userEngagementChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Performance & AI Stats -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-pie me-2 text-primary"></i>Category Performance
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-robot me-2 text-success"></i>AI Recommendation Stats
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="text-center p-3 bg-light rounded">
+                                <h3 class="fw-bold text-primary mb-1">{{ total_recommendations }}</h3>
+                                <p class="text-muted mb-0 small">Total Recommendations</p>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center p-3 bg-light rounded">
+                                <h3 class="fw-bold text-success mb-1">{{ recommendation_clicks }}</h3>
+                                <p class="text-muted mb-0 small">Clicks on Recommendations</p>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center p-3 bg-light rounded">
+                                <h3 class="fw-bold text-info mb-1">{{ avg_score|floatformat:1 }}%</h3>
+                                <p class="text-muted mb-0 small">Avg Match Score</p>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center p-3 bg-light rounded">
+                                <h3 class="fw-bold text-warning mb-1">{{ conversion_rate|floatformat:1 }}%</h3>
+                                <p class="text-muted mb-0 small">Conversion Rate</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <h6 class="fw-bold mb-3">Recommendation Performance</h6>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small>Collaborative Filtering</small>
+                                <small class="text-muted">65%</small>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar bg-primary" style="width: 65%;"></div>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small>Content-Based</small>
+                                <small class="text-muted">45%</small>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar bg-success" style="width: 45%;"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <small>Hybrid Approach</small>
+                                <small class="text-muted">85%</small>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar bg-warning" style="width: 85%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Stats Table -->
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-table me-2 text-primary"></i>Detailed Statistics
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Metric</th>
+                                    <th>Value</th>
+                                    <th>Change</th>
+                                    <th>Trend</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><i class="fas fa-dollar-sign text-success me-2"></i>Total Revenue</td>
+                                    <td class="fw-bold">{{ total_revenue|currency }}</td>
+                                    <td><span class="badge bg-success">+12.5%</span></td>
+                                    <td><i class="fas fa-arrow-up text-success"></i></td>
+                                </tr>
+                                <tr>
+                                    <td><i class="fas fa-shopping-cart text-primary me-2"></i>Total Orders</td>
+                                    <td class="fw-bold">{{ total_orders }}</td>
+                                    <td><span class="badge bg-success">+8.3%</span></td>
+                                    <td><i class="fas fa-arrow-up text-success"></i></td>
+                                </tr>
+                                <tr>
+                                    <td><i class="fas fa-chart-line text-info me-2"></i>Average Order Value</td>
+                                    <td class="fw-bold">{{ avg_order_value|currency }}</td>
+                                    <td><span class="badge bg-warning text-dark">+2.1%</span></td>
+                                    <td><i class="fas fa-arrow-up text-warning"></i></td>
+                                </tr>
+                                <tr>
+                                    <td><i class="fas fa-users text-warning me-2"></i>New Customers</td>
+                                    <td class="fw-bold">{{ new_customers }}</td>
+                                    <td><span class="badge bg-success">+15.7%</span></td>
+                                    <td><i class="fas fa-arrow-up text-success"></i></td>
+                                </tr>
+                                <tr>
+                                    <td><i class="fas fa-redo text-secondary me-2"></i>Repeat Purchase Rate</td>
+                                    <td class="fw-bold">{{ repeat_rate|floatformat:1 }}%</td>
+                                    <td><span class="badge bg-success">+3.2%</span></td>
+                                    <td><i class="fas fa-arrow-up text-success"></i></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// Date Range Toggle
+document.getElementById('dateRange').addEventListener('change', function() {
+    const customFields = ['customStartDate', 'customEndDate'];
+    if (this.value === 'custom') {
+        customFields.forEach(id => document.getElementById(id).style.display = 'block');
+    } else {
+        customFields.forEach(id => document.getElementById(id).style.display = 'none');
+    }
+});
+
+// Revenue Trend Chart
+const revenueTrendCtx = document.getElementById('revenueTrendChart');
+new Chart(revenueTrendCtx, {
+    type: 'line',
+    data: {
+        labels: {{ revenue_labels|default:"['Week 1', 'Week 2', 'Week 3', 'Week 4']"|safe }},
+        datasets: [{
+            label: 'Revenue (Rs.)',
+            data: {{ revenue_data|default:"[25000, 32000, 28000, 35000]"|safe }},
+            borderColor: '#43AA8B',
+            backgroundColor: 'rgba(67, 170, 139, 0.1)',
+            tension: 0.4,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: true }
+        }
+    }
+});
+
+// Top Products Chart
+const topProductsCtx = document.getElementById('topProductsChart');
+new Chart(topProductsCtx, {
+    type: 'bar',
+    data: {
+        labels: {{ product_labels|default:"['Product A', 'Product B', 'Product C', 'Product D', 'Product E']"|safe }},
+        datasets: [{
+            label: 'Revenue (Rs.)',
+            data: {{ product_revenue|default:"[15000, 12000, 10000, 8000, 6000]"|safe }},
+            backgroundColor: '#6C63FF'
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: true
+    }
+});
+
+// User Engagement Chart
+const engagementCtx = document.getElementById('userEngagementChart');
+new Chart(engagementCtx, {
+    type: 'bar',
+    data: {
+        labels: ['Views', 'Cart Adds', 'Purchases'],
+        datasets: [{
+            label: 'Count',
+            data: {{ engagement_data|default:"[1500, 450, 180]"|safe }},
+            backgroundColor: ['#3F8EFC', '#F8961E', '#43AA8B']
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true
+    }
+});
+
+// Category Performance Chart
+const categoryCtx = document.getElementById('categoryChart');
+new Chart(categoryCtx, {
+    type: 'doughnut',
+    data: {
+        labels: {{ category_labels|default:"['Electronics', 'Clothing', 'Books', 'Food', 'Others']"|safe }},
+        datasets: [{
+            data: {{ category_data|default:"[35, 25, 15, 15, 10]"|safe }},
+            backgroundColor: ['#6C63FF', '#FF6584', '#43AA8B', '#F8961E', '#3F8EFC']
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true
+    }
+});
+
+function exportData() {
+    alert('CSV export functionality will download analytics data');
+}
+</script>
+{% endblock %}

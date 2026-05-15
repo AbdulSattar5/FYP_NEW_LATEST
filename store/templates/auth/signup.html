@@ -1,0 +1,272 @@
+{% extends 'base.html' %}
+{% load static crispy_forms_tags %}
+
+{% block title %}Sign Up - AI Shop{% endblock %}
+
+{% block content %}
+
+<section class="py-5" style="min-height: 100vh; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+    <div class="container">
+        <div class="row g-0 shadow-lg rounded-4 overflow-hidden" style="max-width: 1100px; margin: 0 auto;">
+            
+            <!-- Left Panel: Branding -->
+            <div class="col-lg-5 d-none d-lg-block" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <div class="p-5 text-white d-flex flex-column justify-content-center h-100">
+                    <div class="mb-4">
+                        <h2 class="fw-bold mb-3">
+                            <i class="fas fa-bolt me-2"></i>Join AI Shop
+                        </h2>
+                        <p class="lead mb-4">Start your smart shopping journey today!</p>
+                    </div>
+                    
+                    <!-- Benefits List -->
+                    <div class="mb-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="bg-white bg-opacity-25 rounded-circle p-2 me-3" style="width: 40px; height: 40px;">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div>
+                                <div class="fw-bold">AI Recommendations</div>
+                                <small style="opacity: 0.9;">Personalized product suggestions</small>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="bg-white bg-opacity-25 rounded-circle p-2 me-3" style="width: 40px; height: 40px;">
+                                <i class="fas fa-box"></i>
+                            </div>
+                            <div>
+                                <div class="fw-bold">Order Tracking</div>
+                                <small style="opacity: 0.9;">Track your orders in real-time</small>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="bg-white bg-opacity-25 rounded-circle p-2 me-3" style="width: 40px; height: 40px;">
+                                <i class="fas fa-tags"></i>
+                            </div>
+                            <div>
+                                <div class="fw-bold">Exclusive Deals</div>
+                                <small style="opacity: 0.9;">Special offers just for you</small>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="bg-white bg-opacity-25 rounded-circle p-2 me-3" style="width: 40px; height: 40px;">
+                                <i class="fas fa-undo"></i>
+                            </div>
+                            <div>
+                                <div class="fw-bold">Easy Returns</div>
+                                <small style="opacity: 0.9;">Hassle-free return policy</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-auto">
+                        <p class="mb-2">Already have an account?</p>
+                        <a href="{% url 'store:login' %}" class="btn btn-outline-light rounded-pill px-4">
+                            <i class="fas fa-sign-in-alt me-2"></i>Login
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Panel: Signup Form -->
+            <div class="col-lg-7 bg-white">
+                <div class="p-5">
+                    <div class="text-center mb-4">
+                        <h3 class="fw-bold mb-2">Create Your Account</h3>
+                        <p class="text-muted">Fill in your details to get started</p>
+                    </div>
+                    
+                    <form method="POST" enctype="multipart/form-data" id="signup-form">
+                        {% csrf_token %}
+                        
+                        <!-- Name Fields (Side by Side) -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.first_name.id_for_label }}" class="form-label">First Name <span class="text-danger">*</span></label>
+                                {{ form.first_name }}
+                                {% if form.first_name.errors %}
+                                    <div class="text-danger small mt-1">{{ form.first_name.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="{{ form.last_name.id_for_label }}" class="form-label">Last Name <span class="text-danger">*</span></label>
+                                {{ form.last_name }}
+                                {% if form.last_name.errors %}
+                                    <div class="text-danger small mt-1">{{ form.last_name.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Username -->
+                        <div class="mb-3">
+                            <label for="{{ form.username.id_for_label }}" class="form-label">Username <span class="text-danger">*</span></label>
+                            {{ form.username }}
+                            {% if form.username.errors %}
+                                <div class="text-danger small mt-1">{{ form.username.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Email -->
+                        <div class="mb-3">
+                            <label for="{{ form.email.id_for_label }}" class="form-label">Email Address <span class="text-danger">*</span></label>
+                            {{ form.email }}
+                            {% if form.email.errors %}
+                                <div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Password Fields -->
+                        <div class="mb-3">
+                            <label for="{{ form.password1.id_for_label }}" class="form-label">Password <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                {{ form.password1 }}
+                                <button class="btn btn-outline-secondary" type="button" id="togglePassword1">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            {% if form.password1.errors %}
+                                <div class="text-danger small mt-1">{{ form.password1.errors.0 }}</div>
+                            {% endif %}
+                            <!-- Password Strength Indicator -->
+                            <div class="mt-2">
+                                <div class="progress" style="height: 5px;">
+                                    <div class="progress-bar" id="password-strength-bar" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <small id="password-strength-label" class="text-muted"></small>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.password2.id_for_label }}" class="form-label">Confirm Password <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                {{ form.password2 }}
+                                <button class="btn btn-outline-secondary" type="button" id="togglePassword2">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            {% if form.password2.errors %}
+                                <div class="text-danger small mt-1">{{ form.password2.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Phone Number (Optional) -->
+                        <div class="mb-3">
+                            <label for="{{ form.phone_number.id_for_label }}" class="form-label">Phone Number</label>
+                            {{ form.phone_number }}
+                            {% if form.phone_number.errors %}
+                                <div class="text-danger small mt-1">{{ form.phone_number.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Profile Picture (Optional) -->
+                        <div class="mb-3">
+                            <label for="{{ form.profile_picture.id_for_label }}" class="form-label">Profile Picture</label>
+                            <input type="file" class="form-control" id="image-input" name="profile_picture" accept="image/*">
+                            <img id="image-preview" src="" alt="Preview" class="mt-2 rounded" style="max-width: 150px; display: none;">
+                            {% if form.profile_picture.errors %}
+                                <div class="text-danger small mt-1">{{ form.profile_picture.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Subscription Type -->
+                        <div class="mb-3">
+                            <label for="{{ form.subscription_type.id_for_label }}" class="form-label">Subscription Type</label>
+                            {{ form.subscription_type }}
+                            {% if form.subscription_type.errors %}
+                                <div class="text-danger small mt-1">{{ form.subscription_type.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Terms Checkbox -->
+                        <div class="mb-3 form-check">
+                            {{ form.agree_terms }}
+                            <label class="form-check-label" for="{{ form.agree_terms.id_for_label }}">
+                                I agree to the <a href="#" class="text-primary">Terms of Service</a> and <a href="#" class="text-primary">Privacy Policy</a> <span class="text-danger">*</span>
+                            </label>
+                            {% if form.agree_terms.errors %}
+                                <div class="text-danger small mt-1">{{ form.agree_terms.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Submit Button -->
+                        <button type="submit" class="btn btn-primary w-100 py-3 rounded-pill fw-bold mb-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
+                            <i class="fas fa-user-plus me-2"></i>Create Account
+                        </button>
+                        
+                        <!-- OR Divider -->
+                        <div class="text-center mb-3">
+                            <span class="text-muted">or sign up with</span>
+                        </div>
+                        
+                        <!-- Social Buttons (UI Only) -->
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-danger w-100" disabled>
+                                    <i class="fab fa-google me-2"></i>Google
+                                </button>
+                            </div>
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-primary w-100" disabled>
+                                    <i class="fab fa-facebook me-2"></i>Facebook
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <!-- Mobile: Login Link -->
+                    <div class="text-center mt-4 d-lg-none">
+                        <p class="text-muted mb-0">Already have an account? <a href="{% url 'store:login' %}" class="text-primary fw-bold">Login</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Password Toggle
+document.getElementById('togglePassword1')?.addEventListener('click', function() {
+    const input = document.getElementById('{{ form.password1.id_for_label }}');
+    const icon = this.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.replace('fa-eye', 'fa-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.replace('fa-eye-slash', 'fa-eye');
+    }
+});
+
+document.getElementById('togglePassword2')?.addEventListener('click', function() {
+    const input = document.getElementById('{{ form.password2.id_for_label }}');
+    const icon = this.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.replace('fa-eye', 'fa-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.replace('fa-eye-slash', 'fa-eye');
+    }
+});
+
+// Image Preview
+document.getElementById('image-input')?.addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('image-preview');
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+});
+</script>
+{% endblock %}
