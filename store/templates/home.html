@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static store_tags %}
+{% load static store_tags category_icons %}
 
 {% block title %}AI Shop — Smart Shopping, Tailored For You{% endblock %}
 
@@ -110,7 +110,7 @@
                    class="category-pill text-decoration-none"
                    style="background: linear-gradient(135deg, {{ category.color }}dd, {{ category.color }}); min-width: 180px;">
                     <div class="text-center p-3 text-white">
-                        <i class="{{ category.icon }} fa-2x mb-2"></i>
+                        <i class="fa-solid {{ category.slug|category_icon }} fa-2x mb-2"></i>
                         <div class="fw-bold">{{ category.name }}</div>
                         <small style="opacity: 0.9;">{{ category.product_count }} items</small>
                     </div>

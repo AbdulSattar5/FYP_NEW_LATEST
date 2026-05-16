@@ -34,7 +34,7 @@
             </div>
             
             <!-- Stock Warning -->
-            {% if product.stock_level|default:0 > 0 and product.stock_level|default:0 < 5 %}
+            {% if product.manages_local_stock and product.stock_level|default:0 > 0 and product.stock_level|default:0 < 5 %}
                 <div class="position-absolute bottom-0 start-0 m-2">
                     <span class="badge bg-warning text-dark">
                         <i class="fas fa-exclamation-triangle"></i> Only {{ product.stock_level }} left!
@@ -85,7 +85,11 @@
             </div>
 
             <div class="mb-3">
-                {% if product.stock_level|default:0 > 0 %}
+                {% if product.is_affiliate_product %}
+                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">
+                    Available on source
+                </span>
+                {% elif product.stock_level|default:0 > 0 %}
                 <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">
                     In stock
                 </span>
@@ -98,11 +102,16 @@
             
             <!-- Buttons -->
             <div class="mt-auto">
-                {% if product.is_in_stock %}
+                {% if product.can_add_to_cart %}
                     <button type="button" class="btn btn-primary w-100 mb-2 btn-add-cart"
                             onclick="addToCart({{ product.product_id }}, 1, this)">
                         <i class="fas fa-shopping-cart"></i> Add to Cart
                     </button>
+                {% elif product.is_affiliate_product and product.buy_on_source_url %}
+                    <a href="{{ product.buy_on_source_url }}" target="_blank" rel="noopener"
+                       class="btn btn-primary w-100 mb-2">
+                        <i class="fas fa-up-right-from-square"></i> Buy on Source
+                    </a>
                 {% else %}
                     <button type="button" class="btn btn-secondary w-100 mb-2" disabled>
                         <i class="fas fa-times-circle"></i> Out of Stock

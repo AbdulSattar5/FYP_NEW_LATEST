@@ -4,7 +4,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from .models import (
     Category, Product, UserInteraction, Recommendation,
-    Order, Feedback, UserProfile
+    Order, Feedback, UserProfile, ExternalSource, ExternalProduct, ProductSyncLog
 )
 
 # ═══════════════════════════════════════════════════════════
@@ -49,12 +49,14 @@ class CategoryAdmin(admin.ModelAdmin):
 class ProductAdmin(admin.ModelAdmin):
     list_display = [
         'show_image', 'name', 'category', 'price', 'get_discount_price',
-        'stock_level', 'is_featured', 'is_on_discount', 'rating', 'is_available'
+        'stock_level', 'is_featured', 'is_on_discount', 'rating', 'is_available',
+        'is_external', 'manages_local_stock'
     ]
     list_editable = [
-        'price', 'stock_level', 'is_featured', 'is_on_discount', 'is_available'
+        'price', 'stock_level', 'is_featured', 'is_on_discount', 'is_available',
+        'is_external', 'manages_local_stock'
     ]
-    list_filter = ['category', 'is_featured', 'is_on_discount', 'is_available', 'created_at']
+    list_filter = ['category', 'is_featured', 'is_on_discount', 'is_available', 'is_external', 'manages_local_stock', 'created_at']
     search_fields = ['name', 'description']
     readonly_fields = ['show_image', 'rating', 'created_at', 'updated_at', 'product_id']
     prepopulated_fields = {'slug': ('name',)}
@@ -68,6 +70,9 @@ class ProductAdmin(admin.ModelAdmin):
         }),
         ('Inventory', {
             'fields': ('stock_level', 'is_available', 'is_featured')
+        }),
+        ('External Source', {
+            'fields': ('is_external', 'manages_local_stock', 'external_url')
         }),
         ('Media', {
             'fields': ('image', 'show_image')
@@ -254,6 +259,41 @@ class RecommendationAdmin(admin.ModelAdmin):
 # ═══════════════════════════════════════════════════════════
 # USER PROFILE ADMIN (Inline with User)
 # ═══════════════════════════════════════════════════════════
+
+@admin.register(ExternalSource)
+class ExternalSourceAdmin(admin.ModelAdmin):
+    list_display = ['key', 'name', 'is_active', 'last_synced_at', 'updated_at']
+    list_filter = ['is_active', 'key']
+    search_fields = ['key', 'name']
+    readonly_fields = ['last_synced_at', 'created_at', 'updated_at']
+
+
+@admin.register(ExternalProduct)
+class ExternalProductAdmin(admin.ModelAdmin):
+    list_display = [
+        'source', 'external_id', 'title', 'price', 'currency',
+        'stock', 'is_published', 'published_product', 'updated_at'
+    ]
+    list_filter = ['source', 'is_published', 'currency']
+    search_fields = ['external_id', 'title', 'category_name']
+    readonly_fields = ['created_at', 'updated_at', 'last_synced_at']
+
+
+@admin.register(ProductSyncLog)
+class ProductSyncLogAdmin(admin.ModelAdmin):
+    list_display = [
+        'source', 'status', 'publish_enabled', 'fetched_count',
+        'normalized_count', 'created_products_count', 'updated_products_count',
+        'error_count', 'started_at', 'finished_at'
+    ]
+    list_filter = ['status', 'publish_enabled', 'source']
+    readonly_fields = [
+        'source', 'status', 'publish_enabled', 'started_at', 'finished_at',
+        'fetched_count', 'normalized_count', 'created_external_count',
+        'updated_external_count', 'created_products_count',
+        'updated_products_count', 'skipped_count', 'error_count', 'summary', 'message'
+    ]
+
 
 class UserProfileInline(admin.StackedInline):
     model = UserProfile

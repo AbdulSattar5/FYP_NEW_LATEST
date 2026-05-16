@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static store_tags %}
+{% load static store_tags category_icons %}
 
 {% block title %}AI Recommendations - AI Shop{% endblock %}
 
@@ -150,7 +150,7 @@
                     {% if rec.product.category %}
                     <a href="{% url 'store:category_products' slug=rec.product.category.slug %}" 
                        class="badge bg-light text-dark text-decoration-none mb-2">
-                        <i class="{{ rec.product.category.icon }} me-1"></i>{{ rec.product.category.name }}
+                        <i class="fa-solid {{ rec.product.category.slug|category_icon }} me-1"></i>{{ rec.product.category.name }}
                     </a>
                     {% else %}
                     <span class="badge bg-light text-dark mb-2">Uncategorized</span>
@@ -195,10 +195,14 @@
 
                     <!-- Action Buttons -->
                     <div class="d-flex gap-2">
-                        {% if rec.product.stock_level > 0 %}
+                        {% if rec.product.can_add_to_cart %}
                         <button type="button" onclick="addToCart({{ rec.product.product_id }}, 1, this)" class="btn btn-sm btn-primary flex-grow-1 btn-add-cart">
                             <i class="fas fa-cart-plus"></i>
                         </button>
+                        {% elif rec.product.is_affiliate_product and rec.product.buy_on_source_url %}
+                        <a href="{{ rec.product.buy_on_source_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary flex-grow-1">
+                            <i class="fas fa-up-right-from-square"></i>
+                        </a>
                         {% else %}
                         <button class="btn btn-sm btn-secondary flex-grow-1" disabled>
                             <i class="fas fa-times-circle"></i>

@@ -4,6 +4,13 @@ from django.contrib.auth.models import User
 from django.utils.text import slugify
 import uuid
 
+from store.utils.commerce import (
+    external_source_key_from_attributes,
+    is_demo_api_source,
+    is_local_checkout_source,
+    resolve_buy_on_source_url,
+)
+
 # ═══════════════════════════════════════════════════════════
 # CATEGORY MODEL
 # ═══════════════════════════════════════════════════════════
@@ -46,6 +53,29 @@ class Category(models.Model):
 # PRODUCT MODEL
 # ═══════════════════════════════════════════════════════════
 
+class ExternalSource(models.Model):
+    SOURCE_KEYS = [
+        ('dummyjson', 'DummyJSON'),
+        ('platzi', 'Platzi Fake Store'),
+        ('bestbuy', 'Best Buy'),
+        ('demo_generated', 'Demo Generated (local)'),
+    ]
+
+    key = models.CharField(max_length=50, unique=True, choices=SOURCE_KEYS)
+    name = models.CharField(max_length=120)
+    base_url = models.URLField(blank=True)
+    is_active = models.BooleanField(default=True)
+    last_synced_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class Product(models.Model):
     product_id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=200)
@@ -81,6 +111,12 @@ class Product(models.Model):
     stock_level = models.IntegerField(default=0)
     is_available = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
+    is_external = models.BooleanField(default=False)
+    manages_local_stock = models.BooleanField(
+        default=True,
+        help_text='If false, this product is sourced externally and checkout happens on partner site.',
+    )
+    external_url = models.URLField(blank=True)
     
     # Stats (auto-calculated)
     rating = models.DecimalField(max_digits=3, decimal_places=1, default=0.0)
@@ -113,6 +149,61 @@ class Product(models.Model):
     def is_in_stock(self):
         """Check if product is in stock"""
         return self.stock_level > 0 and self.is_available
+
+    @property
+    def external_source_key(self) -> str:
+        return external_source_key_from_attributes(self.attributes)
+
+    @property
+    def is_demo_api_product(self) -> bool:
+        """DummyJSON / Platzi / demo-generated products use local checkout."""
+        if is_local_checkout_source(self.external_source_key):
+            return True
+        if isinstance(self.attributes, dict) and self.attributes.get('generated'):
+            return True
+        return False
+
+    @property
+    def buy_on_source_url(self) -> str:
+        """Safe storefront URL for affiliate checkout, never an API JSON endpoint."""
+        if self.is_demo_api_product:
+            return ''
+        return resolve_buy_on_source_url(self.external_url, self.attributes)
+
+    @property
+    def is_affiliate_product(self):
+        """True only when checkout happens on a real external storefront."""
+        if self.is_demo_api_product or self.manages_local_stock:
+            return False
+        return bool(self.buy_on_source_url)
+
+    @property
+    def can_add_to_cart(self):
+        """Allow local cart when product is available and not affiliate-only."""
+        if not self.is_available:
+            return False
+        if self.is_affiliate_product:
+            return False
+        return self.stock_level > 0
+
+    @property
+    def stock_status_label(self):
+        """Human readable stock/source label for cards and details."""
+        if not self.is_available:
+            return 'Unavailable'
+        if self.is_affiliate_product:
+            return 'Available on source'
+        if self.stock_level > 0:
+            return 'In stock'
+        return 'Out of stock'
+
+    @property
+    def external_image_url(self):
+        """Remote image URL stored in attributes when product is imported externally."""
+        if not isinstance(self.attributes, dict):
+            return ''
+        value = self.attributes.get('external_image_url') or self.attributes.get('image_url')
+        return str(value).strip() if value else ''
     
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -127,6 +218,90 @@ class Product(models.Model):
 # ═══════════════════════════════════════════════════════════
 # USER INTERACTION MODEL (feeds the ML engine)
 # ═══════════════════════════════════════════════════════════
+
+class ExternalProduct(models.Model):
+    source = models.ForeignKey(
+        ExternalSource,
+        on_delete=models.CASCADE,
+        related_name='external_products',
+    )
+    external_id = models.CharField(max_length=120)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    category_name = models.CharField(max_length=120, blank=True)
+    price = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    currency = models.CharField(max_length=10, default='USD')
+    image_url = models.URLField(blank=True)
+    rating = models.DecimalField(max_digits=3, decimal_places=1, blank=True, null=True)
+    stock = models.IntegerField(blank=True, null=True)
+    availability = models.CharField(max_length=120, blank=True)
+    product_url = models.URLField(blank=True)
+    raw_data = models.JSONField(default=dict, blank=True)
+    is_published = models.BooleanField(default=False)
+    published_product = models.OneToOneField(
+        Product,
+        on_delete=models.SET_NULL,
+        related_name='external_product',
+        blank=True,
+        null=True,
+    )
+    last_synced_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['source', 'external_id'],
+                name='unique_external_source_product',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['source', 'external_id']),
+            models.Index(fields=['is_published']),
+        ]
+
+    def __str__(self):
+        return f"{self.source.key}:{self.external_id} - {self.title}"
+
+
+class ProductSyncLog(models.Model):
+    STATUS_CHOICES = [
+        ('success', 'Success'),
+        ('partial', 'Partial'),
+        ('failed', 'Failed'),
+    ]
+
+    source = models.ForeignKey(
+        ExternalSource,
+        on_delete=models.SET_NULL,
+        related_name='sync_logs',
+        blank=True,
+        null=True,
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='success')
+    publish_enabled = models.BooleanField(default=False)
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(blank=True, null=True)
+    fetched_count = models.PositiveIntegerField(default=0)
+    normalized_count = models.PositiveIntegerField(default=0)
+    created_external_count = models.PositiveIntegerField(default=0)
+    updated_external_count = models.PositiveIntegerField(default=0)
+    created_products_count = models.PositiveIntegerField(default=0)
+    updated_products_count = models.PositiveIntegerField(default=0)
+    skipped_count = models.PositiveIntegerField(default=0)
+    error_count = models.PositiveIntegerField(default=0)
+    summary = models.JSONField(default=dict, blank=True)
+    message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-started_at']
+
+    def __str__(self):
+        source_key = self.source.key if self.source_id else 'unknown'
+        return f"{source_key} sync @ {self.started_at:%Y-%m-%d %H:%M:%S}"
+
 
 INTERACTION_TYPES = [
     ('view', 'Viewed'),

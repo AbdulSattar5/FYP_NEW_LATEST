@@ -40,6 +40,8 @@ copy .env.example .env   # Windows
 | `ALLOWED_HOSTS` | Comma-separated hostnames (no spaces). |
 | `CLOUDINARY_*` | Optional; all three must be set to enable Cloudinary SDK config. |
 | `USE_CLOUDINARY_STORAGE` | `true` to use Cloudinary as default file storage for uploads. |
+| `DEFAULT_PRODUCT_SOURCE` | Default provider for sync: `dummyjson`, `platzi`, or `bestbuy`. |
+| `BESTBUY_API_KEY` | API key for Best Buy product sync (optional). |
 
 See `.env.example` for a template.
 
@@ -49,7 +51,7 @@ See `.env.example` for a template.
 python manage.py migrate
 ```
 
-## Import products
+## Import products (CSV)
 
 Requires a compatible CSV in the project root (auto-detects cleaned / products / UK format). Optional category file `amazon_categories.csv` helps UK imports.
 
@@ -57,6 +59,27 @@ Requires a compatible CSV in the project root (auto-detects cleaned / products /
 python manage.py import_products
 # Options: --source auto|cleaned|products|uk --clear --limit N
 ```
+
+## Sync products from external APIs
+
+Products are fetched from the provider, normalized, stored in `ExternalProduct`, and optionally published to the local `Product` table. The site always reads from the database, not live APIs.
+
+Supported sources (in priority order for testing):
+
+1. **DummyJSON** — `https://dummyjson.com/products` (no API key)
+2. **Platzi Fake Store** — `https://api.escuelajs.co/api/v1/products`
+3. **Best Buy** — requires `BESTBUY_API_KEY` in `.env` ([Best Buy Developer](https://developer.bestbuy.com/apis))
+
+```bash
+# Default source from DEFAULT_PRODUCT_SOURCE (dummyjson)
+python manage.py sync_external_products --source dummyjson --limit 100 --publish true
+
+# Other providers
+python manage.py sync_external_products --source platzi --limit 50 --publish true
+python manage.py sync_external_products --source bestbuy --limit 25 --publish true
+```
+
+Affiliate imports use **Buy on Source** (external URL). Local inventory products still use **Add to Cart**.
 
 ## Train recommender and generate recommendations
 

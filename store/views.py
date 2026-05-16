@@ -35,6 +35,11 @@ ALLOWED_TRACK_INTERACTIONS = {'view', 'click', 'cart', 'purchase', 'search'}
 ORDER_SUBMISSION_TOKEN_PREFIX = 'order_submission_token'
 
 
+def _recommendable_products_q():
+    """Products that can be shown in recommendation/trending slots."""
+    return Q(is_available=True) & (Q(manages_local_stock=False) | Q(stock_level__gt=0))
+
+
 def _parse_json_body(request):
     """Parse request JSON body and return dict or None if invalid."""
     if not request.body:
@@ -57,6 +62,10 @@ def _product_image_url(product):
     try:
         if product.image:
             return product.image.url
+        if isinstance(product.attributes, dict):
+            external_image = (product.attributes.get('external_image_url') or product.attributes.get('image_url') or '').strip()
+            if external_image:
+                return external_image
     except ValueError:
         pass
     return static('images/default-product.svg')
@@ -74,6 +83,8 @@ def _parse_decimal_query_value(raw_value):
 
 def _serialize_product_for_api(product):
     """Common product serializer for JSON APIs."""
+    is_affiliate = bool(getattr(product, 'is_affiliate_product', False))
+    buy_url = getattr(product, 'buy_on_source_url', '') if is_affiliate else ''
     return {
         'id': product.product_id,
         'title': product.name,
@@ -83,6 +94,10 @@ def _serialize_product_for_api(product):
         'category': product.category.name if product.category else '',
         'rating': float(product.rating),
         'stock': product.stock_level,
+        'is_affiliate': is_affiliate,
+        'can_add_to_cart': bool(getattr(product, 'can_add_to_cart', False)),
+        'external_url': buy_url,
+        'action_label': 'Buy on Source' if is_affiliate else 'View Details',
         'description': product.description or '',
     }
 
@@ -107,7 +122,9 @@ def _dedupe_products(products, limit=None, exclude_ids=None):
     for product in products or []:
         if not product:
             continue
-        if not product.is_available or product.stock_level <= 0:
+        if not product.is_available:
+            continue
+        if product.manages_local_stock and product.stock_level <= 0:
             continue
         if product.product_id in seen:
             continue
@@ -128,8 +145,7 @@ def _get_actor_recommendation_kwargs(request):
 def _get_trending_products(limit=8, exclude_ids=None):
     """Simple trending fallback from active in-stock catalog."""
     products = Product.objects.filter(
-        is_available=True,
-        stock_level__gt=0,
+        _recommendable_products_q(),
     ).select_related('category').order_by('-rating', '-stock_level', '-created_at')
     return _dedupe_products(products, limit=limit, exclude_ids=exclude_ids)
 
@@ -155,8 +171,8 @@ def _get_recently_viewed_products(request, limit=8, exclude_ids=None):
 
     products = Product.objects.filter(
         product_id__in=viewed_ids,
-        is_available=True,
-        stock_level__gt=0,
+    ).filter(
+        _recommendable_products_q(),
     ).select_related('category')
     product_map = {product.product_id: product for product in products}
     ordered = [product_map[pid] for pid in viewed_ids if pid in product_map]
@@ -205,24 +221,23 @@ def log_interaction(user, product_id, interaction_type, count_increment=1, sessi
 def home_view(request):
     """Home page with featured products, trending, discounts, and AI recommendations"""
     
-    # Get featured products
-    featured_products = Product.objects.filter(
-        is_featured=True,
-        is_available=True,
-        stock_level__gt=0
-    ).select_related('category')[:8]
-    
+    recommendable = Product.objects.filter(_recommendable_products_q()).select_related('category')
+
     # Get trending products (by rating)
-    trending_products = Product.objects.filter(
-        is_available=True,
-        stock_level__gt=0
-    ).order_by('-rating')[:8].select_related('category')
+    trending_products = recommendable.order_by('-rating')[:8]
+
+    # Featured slot: use flagged products, or fall back to top-rated so home is never empty
+    featured_products = list(
+        recommendable.filter(is_featured=True).order_by('-rating')[:8]
+    )
+    if not featured_products:
+        featured_products = list(trending_products[:8])
     
     # Get discounted products
     discounted_products = Product.objects.filter(
         is_on_discount=True,
-        is_available=True,
-        stock_level__gt=0
+    ).filter(
+        _recommendable_products_q()
     ).order_by('-discount_percentage')[:6].select_related('category')
     
     # Get all categories with product count
@@ -543,8 +558,7 @@ def product_detail_view(request, pk):
     
     # Similar products from same category
     similar_base_qs = Product.objects.filter(
-        is_available=True,
-        stock_level__gt=0
+        _recommendable_products_q()
     ).exclude(product_id=pk).select_related('category')
     if product.category_id:
         similar_products = _dedupe_products(
@@ -866,6 +880,11 @@ def update_cart_api_view(request, product_id):
             'success': False,
             'error': 'Product not found',
         }, status=404)
+    if not product.can_add_to_cart:
+        return JsonResponse({
+            'success': False,
+            'error': 'This product is available on source only and cannot be added to cart.',
+        }, status=400)
 
     cart = request.session.get('cart', {})
     product_key = str(product_id)
@@ -1100,6 +1119,12 @@ def add_to_cart_view(request, product_id):
                 'message': 'Quantity must be at least 1',
             }, status=400)
 
+        if not product.can_add_to_cart:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'This product is available on source only and cannot be added to cart.',
+            }, status=400)
+
         # Check stock
         if product.stock_level <= 0:
             return JsonResponse({
@@ -1175,6 +1200,9 @@ def view_cart_view(request):
     for product_id, item in cart.items():
         try:
             product = Product.objects.get(product_id=int(product_id))
+            if not product.can_add_to_cart:
+                invalid_product_keys.append(product_id)
+                continue
             quantity = int(item.get('quantity', 1))
             unit_price = float(product.discount_price or 0)
             item_subtotal = unit_price * quantity
@@ -1290,6 +1318,9 @@ def place_order_view(request, product_id):
     if not product:
         messages.error(request, 'Product is unavailable.')
         return redirect('store:product_list')
+    if not product.can_add_to_cart:
+        messages.error(request, 'This product is available on source only and cannot be checked out locally.')
+        return redirect('store:product_detail', pk=product_id)
 
     token_key = _order_submission_session_key(product_id)
 

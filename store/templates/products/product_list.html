@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static store_tags %}
+{% load static store_tags category_icons %}
 
 {% block title %}All Products - AI Shop{% endblock %}
 
@@ -71,7 +71,7 @@
                             <a href="?category={{ category.slug }}" data-catalog-link
                                class="list-group-item list-group-item-action d-flex justify-content-between align-items-center {% if request.GET.category == category.slug %}active{% endif %}">
                                 <span>
-                                    <i class="{{ category.icon }} me-2"></i>{{ category.name }}
+                                    <i class="fa-solid {{ category.slug|category_icon }} me-2"></i>{{ category.name }}
                                 </span>
                                 <span class="badge bg-primary rounded-pill">{{ category.product_count }}</span>
                             </a>

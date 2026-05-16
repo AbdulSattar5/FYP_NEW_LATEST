@@ -1,4 +1,4 @@
-{% load static %}
+{% load static category_icons %}
 
 <footer class="bg-dark text-white pt-5 pb-3 mt-5">
     <div class="container">
@@ -78,7 +78,7 @@
                     <li class="mb-2">
                         <a href="{% url 'store:category_products' slug=category.slug %}" 
                            class="text-white-50 text-decoration-none">
-                            <i class="{{ category.icon }} me-2"></i>{{ category.name }}
+                            <i class="fa-solid {{ category.slug|category_icon }} me-2"></i>{{ category.name }}
                         </a>
                     </li>
                     {% endfor %}

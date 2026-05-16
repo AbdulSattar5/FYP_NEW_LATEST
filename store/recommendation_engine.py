@@ -11,6 +11,7 @@ import pandas as pd
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -50,6 +51,10 @@ _ARTIFACT_CACHE = {
     "trained_at": None,
     "data": None,
 }
+
+
+def _recommendable_product_q() -> Q:
+    return Q(is_available=True) & (Q(manages_local_stock=False) | Q(stock_level__gt=0))
 
 
 def _artifact_dir() -> Path:
@@ -514,7 +519,11 @@ def _build_content_scores(
             return {}
 
     similarities = cosine_similarity(profile_input, product_matrix).ravel()
-    return {pid: float(similarities[product_index[pid]]) for pid in product_ids}
+    return {
+        pid: float(similarities[product_index[pid]])
+        for pid in product_ids
+        if pid in product_index and product_index[pid] < len(similarities)
+    }
 
 
 def _build_category_scores(
@@ -547,7 +556,8 @@ def _build_collaborative_scores(
     if not actor_weights:
         return {}
 
-    scores = np.zeros(len(product_ids), dtype=float)
+    artifact_size = item_similarity.shape[1]
+    scores = np.zeros(artifact_size, dtype=float)
     for history_pid, weight in actor_weights.items():
         if history_pid not in product_index:
             continue
@@ -557,7 +567,11 @@ def _build_collaborative_scores(
             continue
         scores[sim_row.indices] += sim_row.data * float(weight)
 
-    return {pid: float(scores[product_index[pid]]) for pid in product_ids}
+    return {
+        pid: float(scores[product_index[pid]])
+        for pid in product_ids
+        if pid in product_index and product_index[pid] < len(scores)
+    }
 
 
 def _combine_component_scores(
@@ -622,11 +636,14 @@ def _recommend_from_artifacts(
     profiles = artifacts.get("profiles", {})
     actor_weights = profiles.get("actor_product_weights", {}).get(actor_key, {}) if actor_key else {}
     has_history = bool(actor_weights)
+    artifact_candidate_ids = [int(pid) for pid in candidate_ids if int(pid) in product_index]
+    if not artifact_candidate_ids:
+        return []
 
     content_scores = (
         _build_content_scores(
             actor_key=actor_key,
-            product_ids=candidate_ids,
+            product_ids=artifact_candidate_ids,
             product_index=product_index,
             profiles=profiles,
             product_matrix=artifacts.get("product_matrix"),
@@ -637,7 +654,7 @@ def _recommend_from_artifacts(
     category_scores = (
         _build_category_scores(
             actor_key=actor_key,
-            product_ids=candidate_ids,
+            product_ids=artifact_candidate_ids,
             product_category_map=artifacts.get("product_category_map", {}),
             profiles=profiles,
         )
@@ -647,7 +664,7 @@ def _recommend_from_artifacts(
     collaborative_scores = (
         _build_collaborative_scores(
             actor_key=actor_key,
-            product_ids=candidate_ids,
+            product_ids=artifact_candidate_ids,
             product_index=product_index,
             profiles=profiles,
             item_similarity=artifacts.get("item_similarity"),
@@ -657,7 +674,7 @@ def _recommend_from_artifacts(
     )
 
     final_scores, component_breakdown = _combine_component_scores(
-        product_ids=candidate_ids,
+        product_ids=artifact_candidate_ids,
         popularity_scores=popularity_scores,
         content_scores=content_scores,
         category_scores=category_scores,
@@ -670,7 +687,7 @@ def _recommend_from_artifacts(
         blocked_ids.update(actor_weights.keys())
 
     ranked_ids = sorted(
-        candidate_ids,
+        artifact_candidate_ids,
         key=lambda pid: (-_safe_float(final_scores.get(pid, 0.0)), -_safe_float(popularity_scores.get(pid, 0.0)), int(pid)),
     )
 
@@ -710,7 +727,8 @@ def _fallback_popular_product_ids(candidate_ids: List[int], limit: int) -> List[
     if not candidate_ids:
         return []
     ranked_ids = list(
-        Product.objects.filter(product_id__in=candidate_ids, is_available=True, stock_level__gt=0)
+        Product.objects.filter(product_id__in=candidate_ids)
+        .filter(_recommendable_product_q())
         .order_by("-rating", "-stock_level", "product_id")
         .values_list("product_id", flat=True)
     )
@@ -741,7 +759,7 @@ def recommend_with_scores(
     limit = _normalize_limit(limit)
 
     candidate_ids = list(
-        Product.objects.filter(is_available=True, stock_level__gt=0).values_list("product_id", flat=True)
+        Product.objects.filter(_recommendable_product_q()).values_list("product_id", flat=True)
     )
     if not candidate_ids:
         return []
@@ -762,6 +780,21 @@ def recommend_with_scores(
         exclude_ids=exclude_ids,
     )
     if recommendations:
+        if len(recommendations) < limit:
+            existing_ids = {item["product_id"] for item in recommendations}
+            fallback_ids = _fallback_popular_product_ids(candidate_ids, limit)
+            for product_id in fallback_ids:
+                if product_id in existing_ids or product_id in exclude_ids:
+                    continue
+                recommendations.append(
+                    {
+                        "product_id": int(product_id),
+                        "score": 0.0,
+                        "reason": "Popular with shoppers",
+                    }
+                )
+                if len(recommendations) >= limit:
+                    break
         return recommendations
 
     fallback_ids = _fallback_popular_product_ids(candidate_ids, limit)
@@ -780,8 +813,8 @@ def get_recommendations(
     product_ids = [item["product_id"] for item in scored]
     products = Product.objects.filter(
         product_id__in=product_ids,
-        is_available=True,
-        stock_level__gt=0,
+    ).filter(
+        _recommendable_product_q()
     ).select_related("category")
     product_map = {product.product_id: product for product in products}
     return [product_map[pid] for pid in product_ids if pid in product_map]
@@ -1048,7 +1081,9 @@ def get_quick_recommendations(user_id: int, n: int = 6) -> List[Product]:
         .order_by("-score")[:n]
     )
     saved_products = [
-        rec.product for rec in saved_recs if rec.product and rec.product.is_available and rec.product.stock_level > 0
+        rec.product
+        for rec in saved_recs
+        if rec.product and rec.product.is_available and (not rec.product.manages_local_stock or rec.product.stock_level > 0)
     ]
     if saved_products:
         return saved_products
@@ -1070,7 +1105,7 @@ def _persist_recommendation_rows(
         return []
 
     product_ids = [item["product_id"] for item in scored]
-    products = Product.objects.filter(product_id__in=product_ids, is_available=True, stock_level__gt=0)
+    products = Product.objects.filter(product_id__in=product_ids).filter(_recommendable_product_q())
     product_map = {product.product_id: product for product in products}
 
     rows: List[Recommendation] = []

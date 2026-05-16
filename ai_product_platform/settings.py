@@ -19,7 +19,17 @@ from django.core.exceptions import ImproperlyConfigured
 try:
     from dotenv import load_dotenv
 except ImportError:  # optional during minimal tooling
-    def load_dotenv(*_args, **_kwargs):
+    def load_dotenv(path, *_args, **_kwargs):
+        try:
+            with open(path, "r", encoding="utf-8") as env_file:
+                for line in env_file:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, value = line.split("=", 1)
+                    os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+        except OSError:
+            return False
         return False
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -33,6 +43,10 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+BESTBUY_API_KEY = os.environ.get("BESTBUY_API_KEY", "").strip()
+DEFAULT_PRODUCT_SOURCE = os.environ.get("DEFAULT_PRODUCT_SOURCE", "dummyjson").strip().lower() or "dummyjson"
 
 
 # Quick-start development settings - unsuitable for production
@@ -134,7 +148,7 @@ WSGI_APPLICATION = "ai_product_platform.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": BASE_DIR / os.environ.get("SQLITE_DB_NAME", "db.sqlite3"),
     }
 }
 

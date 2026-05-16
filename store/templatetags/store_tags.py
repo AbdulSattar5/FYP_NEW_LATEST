@@ -62,6 +62,12 @@ def product_image_url(product):
     try:
         if product and getattr(product, 'image', None):
             return product.image.url
+        if product:
+            attrs = getattr(product, 'attributes', {}) or {}
+            if isinstance(attrs, dict):
+                external_image = (attrs.get('external_image_url') or attrs.get('image_url') or '').strip()
+                if external_image:
+                    return external_image
     except (ValueError, AttributeError):
         pass
     return static('images/default-product.svg')

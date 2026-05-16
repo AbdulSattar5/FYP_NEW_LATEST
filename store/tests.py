@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import uuid
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -13,7 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 import store.recommendation_engine as recommendation_engine
-from store.models import Category, Order, Product, UserInteraction
+from store.models import Category, ExternalProduct, Order, Product, UserInteraction
 from store.product_importer import ProductImporter
 from store.recommendation_engine import clear_artifact_cache, train_recommender_artifacts
 
@@ -553,6 +554,92 @@ class PageAndTemplateTests(TestCase):
         response = self.client.get(reverse("store:recommendations"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "products/recommendations.html")
+
+
+class ExternalProductSyncTests(TestCase):
+    def setUp(self):
+        self.sample_products = [
+            {
+                'id': 101,
+                'title': 'External Phone',
+                'description': 'Imported phone',
+                'category': 'electronics',
+                'price': 499,
+                'stock': 30,
+                'rating': 4.6,
+                'thumbnail': 'https://example.com/phone.jpg',
+                'images': ['https://example.com/phone.jpg'],
+            },
+            {
+                'id': 102,
+                'title': 'External Backpack',
+                'description': 'Imported backpack',
+                'category': 'accessories',
+                'price': 79,
+                'stock': 0,
+                'rating': 4.1,
+                'thumbnail': 'https://example.com/bag.jpg',
+                'images': ['https://example.com/bag.jpg'],
+            },
+        ]
+
+    def _mock_dummyjson_get(self, *_args, **_kwargs):
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {'products': self.sample_products}
+        return response
+
+    @patch('store.services.external_products.base.requests.Session.get')
+    def test_sync_dummyjson_products(self, mock_get):
+        mock_get.side_effect = self._mock_dummyjson_get
+        call_command('sync_external_products', '--source', 'dummyjson', '--limit', '2', '--publish', 'false')
+
+        self.assertEqual(ExternalProduct.objects.count(), 2)
+        self.assertEqual(Product.objects.count(), 0)
+
+    @patch('store.services.external_products.base.requests.Session.get')
+    def test_publish_products(self, mock_get):
+        mock_get.side_effect = self._mock_dummyjson_get
+        call_command('sync_external_products', '--source', 'dummyjson', '--limit', '2', '--publish', 'true')
+
+        self.assertEqual(ExternalProduct.objects.count(), 2)
+        self.assertEqual(Product.objects.count(), 2)
+        self.assertGreaterEqual(Category.objects.count(), 2)
+        product = Product.objects.get(name='External Phone')
+        self.assertTrue(product.manages_local_stock)
+        self.assertTrue(product.stock_level > 0)
+        self.assertTrue(product.can_add_to_cart)
+        self.assertFalse(product.is_affiliate_product)
+        self.assertEqual(product.buy_on_source_url, '')
+
+    @patch('store.services.external_products.base.requests.Session.get')
+    def test_homepage_detail_and_search_with_imported_products(self, mock_get):
+        mock_get.side_effect = self._mock_dummyjson_get
+        call_command('sync_external_products', '--source', 'dummyjson', '--limit', '2', '--publish', 'true')
+
+        home_response = self.client.get(reverse('store:home'))
+        self.assertEqual(home_response.status_code, 200)
+        self.assertContains(home_response, 'External Phone')
+
+        product = Product.objects.get(name='External Phone')
+        detail_response = self.client.get(reverse('store:product_detail', args=[product.product_id]))
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, 'External Phone')
+
+        search_response = self.client.get(reverse('store:search'), {'q': 'Phone'})
+        self.assertEqual(search_response.status_code, 200)
+        self.assertContains(search_response, 'External Phone')
+        self.assertContains(home_response, 'Add to Cart')
+        self.assertNotContains(home_response, 'Buy on Source')
+
+    @patch('store.services.external_products.base.requests.Session.get')
+    def test_duplicate_sync_does_not_duplicate_products(self, mock_get):
+        mock_get.side_effect = self._mock_dummyjson_get
+        call_command('sync_external_products', '--source', 'dummyjson', '--limit', '2', '--publish', 'true')
+        call_command('sync_external_products', '--source', 'dummyjson', '--limit', '2', '--publish', 'true')
+
+        self.assertEqual(ExternalProduct.objects.count(), 2)
+        self.assertEqual(Product.objects.count(), 2)
 
 
 class TrainAndGenerateCommandsTests(TestCase):

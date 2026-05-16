@@ -1,4 +1,4 @@
-{% load static store_tags %}
+{% load static store_tags category_icons %}
 
 <div class="top-bar bg-dark text-white d-none d-md-block">
     <div class="container">
@@ -111,11 +111,11 @@
 <div class="navbar-subbar d-none d-lg-block" aria-label="Category navigation">
     <div class="container">
         <a href="{% url 'store:product_list' %}">
-            <i class="fas fa-th me-1"></i>All Products
+            <i class="fa-solid fa-table-cells me-1"></i>All Products
         </a>
         {% for category in all_categories %}
         <a href="{% url 'store:category_products' slug=category.slug %}">
-            <i class="{{ category.icon }} me-1"></i>{{ category.name }}
+            <i class="fa-solid {{ category.slug|category_icon }} me-1"></i>{{ category.name }}
         </a>
         {% endfor %}
     </div>
@@ -191,7 +191,7 @@
         <div class="list-group">
             {% for category in all_categories %}
             <a href="{% url 'store:category_products' slug=category.slug %}" class="list-group-item list-group-item-action">
-                <i class="{{ category.icon }} me-2"></i>{{ category.name }}
+                <i class="fa-solid {{ category.slug|category_icon }} me-2"></i>{{ category.name }}
             </a>
             {% endfor %}
         </div>

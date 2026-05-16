@@ -581,6 +581,11 @@ function renderQuickViewContent(product, detailUrl) {
     const price = (typeof product.price === 'number' && product.price > 0) ? `Rs. ${product.price.toLocaleString()}` : 'Price unavailable';
     const rating = (typeof product.rating === 'number') ? product.rating.toFixed(1) : '0.0';
     const inStock = Number(product.stock || 0) > 0;
+    const canAddToCart = Boolean(product.can_add_to_cart);
+    const isAffiliate = Boolean(product.is_affiliate);
+    const externalUrl = product.external_url || '';
+    const stockText = isAffiliate ? 'Available on source' : (inStock ? 'In stock' : 'Out of stock');
+    const stockClass = isAffiliate ? 'text-bg-info' : (inStock ? 'text-bg-success' : 'text-bg-danger');
 
     return `
         <div class="row g-4 align-items-start">
@@ -591,13 +596,18 @@ function renderQuickViewContent(product, detailUrl) {
                 <p class="text-muted mb-1">${product.category || 'Uncategorized'}</p>
                 <h4 class="fw-bold mb-2">${product.title || 'Product'}</h4>
                 <div class="d-flex align-items-center gap-3 mb-3">
-                    <span class="badge ${inStock ? 'text-bg-success' : 'text-bg-danger'}">${inStock ? 'In stock' : 'Out of stock'}</span>
+                    <span class="badge ${stockClass}">${stockText}</span>
                     <span class="text-muted"><i class="fas fa-star text-warning me-1"></i>${rating}/5</span>
                 </div>
                 <h4 class="text-primary fw-bold mb-3">${price}</h4>
                 <p class="text-muted">${product.description || 'No description available.'}</p>
                 <div class="d-flex gap-2 mt-3">
-                    ${inStock ? `<button type="button" class="btn btn-primary btn-add-cart" data-modal-add="${product.id}"><i class="fas fa-shopping-cart me-1"></i>Add to Cart</button>` : `<button type="button" class="btn btn-secondary" disabled><i class="fas fa-times-circle me-1"></i>Out of Stock</button>`}
+                    ${canAddToCart
+                        ? `<button type="button" class="btn btn-primary btn-add-cart" data-modal-add="${product.id}"><i class="fas fa-shopping-cart me-1"></i>Add to Cart</button>`
+                        : isAffiliate && externalUrl
+                            ? `<a href="${externalUrl}" target="_blank" rel="noopener" class="btn btn-primary"><i class="fas fa-up-right-from-square me-1"></i>Buy on Source</a>`
+                            : `<button type="button" class="btn btn-secondary" disabled><i class="fas fa-times-circle me-1"></i>Out of Stock</button>`
+                    }
                     <a href="${detailUrl}" class="btn btn-outline-primary">
                         <i class="fas fa-eye me-1"></i>View Details
                     </a>
