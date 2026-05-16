@@ -93,6 +93,16 @@ python manage.py sync_external_products --source bestbuy --limit 25 --publish tr
 
 Affiliate imports use **Buy on Source** (external URL). Local inventory products still use **Add to Cart**.
 
+### PythonAnywhere / blocked API fallback
+
+Free PythonAnywhere accounts may block external API calls that are not on their allowlist. If `sync_external_products` fails with proxy `403 Forbidden`, load the checked-in seed fixture instead:
+
+```bash
+python manage.py loaddata store/fixtures/pythonanywhere_seed_products.json
+```
+
+The fixture contains real products exported from a successful DummyJSON sync so the storefront can run without calling the external API from PythonAnywhere.
+
 ## Train recommender and generate recommendations
 
 Artifacts are written under `models/recommender/` (ignored by git by default). Training needs the optional ML stack:
