@@ -1,0 +1,4 @@
+# Optional production media dependencies.
+# Only needed if USE_CLOUDINARY_STORAGE=true.
+cloudinary>=1.41,<2
+django-cloudinary-storage>=0.3,<1

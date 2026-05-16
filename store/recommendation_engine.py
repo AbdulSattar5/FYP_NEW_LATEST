@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging
 from collections import defaultdict
@@ -5,17 +7,31 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import joblib
-import numpy as np
-import pandas as pd
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
-from scipy import sparse
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+
+try:
+    import joblib
+    import numpy as np
+    import pandas as pd
+    from scipy import sparse
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    ML_STACK_AVAILABLE = True
+    ML_IMPORT_ERROR = None
+except ImportError as exc:  # pragma: no cover - depends on deployment environment
+    joblib = None
+    np = None
+    pd = None
+    sparse = None
+    TfidfVectorizer = None
+    cosine_similarity = None
+    ML_STACK_AVAILABLE = False
+    ML_IMPORT_ERROR = exc
 
 from store.models import Product, Recommendation, UserInteraction
 
@@ -89,7 +105,16 @@ def clear_artifact_cache() -> None:
     _ARTIFACT_CACHE["data"] = None
 
 
+def _require_ml_stack() -> None:
+    if not ML_STACK_AVAILABLE:
+        raise RuntimeError(
+            "The optional recommender training dependencies are not installed. "
+            "Install them with: pip install -r requirements-ml.txt"
+        ) from ML_IMPORT_ERROR
+
+
 def _build_product_frame() -> pd.DataFrame:
+    _require_ml_stack()
     rows = Product.objects.filter(is_available=True).select_related("category").values(
         "product_id",
         "name",
@@ -114,6 +139,7 @@ def _build_product_frame() -> pd.DataFrame:
 
 
 def _build_interaction_frame(valid_product_ids: set[int]) -> pd.DataFrame:
+    _require_ml_stack()
     rows = UserInteraction.objects.filter(product__isnull=False).values(
         "user_id",
         "session_key",
@@ -162,6 +188,7 @@ def temporal_split_interactions(
     train_ratio: float = 0.7,
     val_ratio: float = 0.15,
 ) -> Dict[str, object]:
+    _require_ml_stack()
     empty_df = pd.DataFrame(
         columns=["actor_key", "product_id", "interaction_type", "interaction_count", "weight", "timestamp"]
     )
@@ -220,6 +247,7 @@ def _normalize_score_map(score_map: Dict[int, float]) -> Dict[int, float]:
 
 
 def _build_training_profiles(train_df: pd.DataFrame, product_frame: pd.DataFrame) -> Dict[str, object]:
+    _require_ml_stack()
     actor_product_weights: Dict[str, Dict[int, float]] = defaultdict(lambda: defaultdict(float))
     actor_purchases: Dict[str, set[int]] = defaultdict(set)
     actor_category_affinity: Dict[str, Dict[int, float]] = defaultdict(lambda: defaultdict(float))
@@ -265,6 +293,7 @@ def _build_training_profiles(train_df: pd.DataFrame, product_frame: pd.DataFrame
 
 
 def _build_popularity_scores(train_df: pd.DataFrame) -> Dict[int, float]:
+    _require_ml_stack()
     if train_df.empty:
         return {}
     grouped = train_df.groupby("product_id")["weight"].sum().to_dict()
@@ -272,6 +301,7 @@ def _build_popularity_scores(train_df: pd.DataFrame) -> Dict[int, float]:
 
 
 def _build_content_artifacts(product_frame: pd.DataFrame) -> Tuple[TfidfVectorizer, sparse.csr_matrix]:
+    _require_ml_stack()
     product_texts = product_frame["text"].fillna("").astype(str).tolist()
     if not product_texts:
         vectorizer = TfidfVectorizer(max_features=1)
@@ -288,6 +318,7 @@ def _build_content_artifacts(product_frame: pd.DataFrame) -> Tuple[TfidfVectoriz
 
 
 def _build_collaborative_artifacts(train_df: pd.DataFrame, product_ids: List[int]) -> Optional[sparse.csr_matrix]:
+    _require_ml_stack()
     if train_df.empty:
         return None
 
@@ -357,6 +388,7 @@ def _prepare_artifact_payload(
     val_ratio: float,
     top_k: int,
 ) -> Dict[str, object]:
+    _require_ml_stack()
     product_ids = [int(pid) for pid in product_frame["product_id"].tolist()]
     product_index = {str(pid): idx for idx, pid in enumerate(product_ids)}
     product_category_map = {
@@ -394,6 +426,7 @@ def _prepare_artifact_payload(
 
 
 def _save_artifacts(payload: Dict[str, object], metrics: Dict[str, object]) -> None:
+    _require_ml_stack()
     artifact_dir = _artifact_dir()
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
@@ -442,16 +475,26 @@ def _load_artifacts_from_disk() -> Optional[Dict[str, object]]:
     matrix_path = artifact_dir / PRODUCT_MATRIX_FILE
     similarity_path = artifact_dir / ITEM_SIMILARITY_FILE
 
-    if vectorizer_path.exists() and matrix_path.exists():
-        vectorizer = joblib.load(vectorizer_path)
-        product_matrix = joblib.load(matrix_path)
-        if not sparse.issparse(product_matrix):
-            product_matrix = sparse.csr_matrix(product_matrix)
+    if ML_STACK_AVAILABLE:
+        if vectorizer_path.exists() and matrix_path.exists():
+            vectorizer = joblib.load(vectorizer_path)
+            product_matrix = joblib.load(matrix_path)
+            if not sparse.issparse(product_matrix):
+                product_matrix = sparse.csr_matrix(product_matrix)
 
-    if similarity_path.exists():
-        loaded_similarity = joblib.load(similarity_path)
-        if loaded_similarity is not None:
-            item_similarity = loaded_similarity if sparse.issparse(loaded_similarity) else sparse.csr_matrix(loaded_similarity)
+        if similarity_path.exists():
+            loaded_similarity = joblib.load(similarity_path)
+            if loaded_similarity is not None:
+                item_similarity = (
+                    loaded_similarity
+                    if sparse.issparse(loaded_similarity)
+                    else sparse.csr_matrix(loaded_similarity)
+                )
+    elif vectorizer_path.exists() or matrix_path.exists() or similarity_path.exists():
+        logger.warning(
+            "Recommender ML artifacts exist but optional ML dependencies are not installed; "
+            "serving JSON-based popularity/category fallbacks only."
+        )
 
     profiles = _deserialize_profiles(raw_profiles)
     popularity_scores = {int(pid): float(score) for pid, score in popularity_raw.items()}
@@ -492,7 +535,7 @@ def _build_content_scores(
     profiles: Dict[str, object],
     product_matrix: Optional[sparse.csr_matrix],
 ) -> Dict[int, float]:
-    if product_matrix is None:
+    if not ML_STACK_AVAILABLE or product_matrix is None:
         return {}
 
     actor_weights = profiles.get("actor_product_weights", {}).get(actor_key, {})
@@ -549,7 +592,7 @@ def _build_collaborative_scores(
     profiles: Dict[str, object],
     item_similarity: Optional[sparse.csr_matrix],
 ) -> Dict[int, float]:
-    if item_similarity is None:
+    if not ML_STACK_AVAILABLE or item_similarity is None:
         return {}
 
     actor_weights = profiles.get("actor_product_weights", {}).get(actor_key, {})

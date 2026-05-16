@@ -24,6 +24,18 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+`requirements.txt` is the lightweight production/runtime install. It is intended for small hosts such as PythonAnywhere and keeps the storefront, cart, checkout, API sync, and fallback recommendations working.
+
+Optional installs:
+
+```bash
+# Only needed when training the full ML recommender locally or on a larger server
+pip install -r requirements-ml.txt
+
+# Only needed when USE_CLOUDINARY_STORAGE=true
+pip install -r requirements-cloudinary.txt
+```
+
 Copy the example environment file and edit values:
 
 ```bash
@@ -83,12 +95,15 @@ Affiliate imports use **Buy on Source** (external URL). Local inventory products
 
 ## Train recommender and generate recommendations
 
-Artifacts are written under `models/recommender/` (ignored by git by default).
+Artifacts are written under `models/recommender/` (ignored by git by default). Training needs the optional ML stack:
 
 ```bash
+pip install -r requirements-ml.txt
 python manage.py train_recommender
 python manage.py generate_recommendations
 ```
+
+If the ML stack is not installed, the live site still works and serves popularity/category fallback recommendations from database products.
 
 Options are documented on each command (`--help`).
 
@@ -116,9 +131,10 @@ The suite covers APIs (search suggestions, track, cart, recommendations), checko
 2. Set `DEBUG=false`, set a strong `SECRET_KEY`, and set `ALLOWED_HOSTS` to your domain(s).
 3. Use a production database (PostgreSQL, etc.) instead of SQLite when handling real traffic.
 4. Collect static files: `python manage.py collectstatic` (WhiteNoise is enabled).
-5. Regenerate recommender artifacts on the server after significant new interaction/product data.
-6. If you use Cloudinary, set all three Cloudinary variables and optionally `USE_CLOUDINARY_STORAGE=true`.
-7. Rotating credentials: the previous Cloudinary keys that were hard-coded in settings have been removed; create new keys in the Cloudinary dashboard if those were ever exposed.
+5. On disk-limited hosts, install only `requirements.txt`; do not install `requirements-ml.txt` unless you have enough quota.
+6. Regenerate recommender artifacts on a larger machine after significant new interaction/product data, then deploy artifacts if desired.
+7. If you use Cloudinary, install `requirements-cloudinary.txt`, set all three Cloudinary variables, and optionally `USE_CLOUDINARY_STORAGE=true`.
+8. Rotating credentials: the previous Cloudinary keys that were hard-coded in settings have been removed; create new keys in the Cloudinary dashboard if those were ever exposed.
 
 ## Project layout (high level)
 

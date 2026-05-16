@@ -43,7 +43,7 @@ class Command(BaseCommand):
                 train_ratio=train_ratio,
                 val_ratio=validation_ratio,
             )
-        except ValueError as exc:
+        except (RuntimeError, ValueError) as exc:
             raise CommandError(str(exc)) from exc
 
         precision_key = f"precision@{top_k}"
